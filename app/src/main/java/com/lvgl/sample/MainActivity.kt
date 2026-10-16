@@ -13,7 +13,6 @@ class MainActivity : LvglActivity() {
 
     override fun onCreateLvgl() {
         LvglNavigation.setMainActivity(this)
-
         setContentView(createMenuLayout())
     }
 
@@ -24,7 +23,10 @@ class MainActivity : LvglActivity() {
         val items = listOf(
             "Widget Showcase" to WidgetShowcaseActivity::class.java,
             "Layout Showcase" to LayoutShowcaseActivity::class.java,
-            "Interactive Demo" to InteractiveDemoActivity::class.java
+            "Interactive Demo" to InteractiveDemoActivity::class.java,
+            "Game Sample" to GameSampleActivity::class.java,
+            "Launcher Sample" to LauncherSampleActivity::class.java,
+            "Camera Sample" to CameraSampleActivity::class.java
         )
 
         items.forEach { (title, target) ->

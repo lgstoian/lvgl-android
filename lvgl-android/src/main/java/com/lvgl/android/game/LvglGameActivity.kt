@@ -1,4 +1,4 @@
-package com.lvgl.android.game
+﻿package com.lvgl.android.game
 
 import android.os.Bundle
 import android.view.WindowManager
@@ -12,7 +12,7 @@ abstract class LvglGameActivity : LvglActivity() {
         }
 
     var immersiveMode: Boolean = true
-        private set
+        public set
 
     abstract fun onGameLoop(deltaMs: Long)
 
@@ -59,3 +59,4 @@ abstract class LvglGameActivity : LvglActivity() {
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 }
+

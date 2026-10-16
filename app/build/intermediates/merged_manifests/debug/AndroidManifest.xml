@@ -11,6 +11,11 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="true" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <permission
         android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -41,6 +46,18 @@
             android:exported="false" />
         <activity
             android:name="com.lvgl.sample.InteractiveDemoActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+        <activity
+            android:name="com.lvgl.sample.GameSampleActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+        <activity
+            android:name="com.lvgl.sample.LauncherSampleActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+        <activity
+            android:name="com.lvgl.sample.CameraSampleActivity"
             android:configChanges="orientation|screenSize"
             android:exported="false" />
 

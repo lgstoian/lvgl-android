@@ -1,4 +1,4 @@
-#Fri Oct 16 15:48:32 EEST 2026
+#Fri Oct 16 15:57:33 EEST 2026
 path.4=13/classes.dex
 path.3=9/classes.dex
 path.2=11/classes.dex
@@ -7,6 +7,7 @@ path.1=0/classes.dex
 renamed.8=classes9.dex
 path.8=11/classes.dex
 path.7=10/classes.dex
+renamed.13=classes14.dex
 path.6=9/classes.dex
 renamed.12=classes13.dex
 path.5=8/classes.dex
@@ -21,6 +22,7 @@ base.0=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeExtD
 renamed.3=classes4.dex
 path.12=6/classes.dex
 renamed.2=classes3.dex
+path.13=14/classes.dex
 renamed.1=classes2.dex
 path.10=15/classes.dex
 renamed.0=classes.dex
@@ -35,6 +37,7 @@ renamed.5=classes6.dex
 base.6=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\9\\classes.dex
 renamed.4=classes5.dex
 base.5=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\8\\classes.dex
+base.13=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\14\\classes.dex
 base.12=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\6\\classes.dex
 base.11=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\1\\classes.dex
 base.10=D\:\\Code\\android lvgl\\app\\build\\intermediates\\dex\\debug\\mergeLibDexDebug\\15\\classes.dex

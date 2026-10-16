@@ -1,6 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -11,5 +14,8 @@
         <activity android:name=".WidgetShowcaseActivity" android:exported="false" android:configChanges="orientation|screenSize" />
         <activity android:name=".LayoutShowcaseActivity" android:exported="false" android:configChanges="orientation|screenSize" />
         <activity android:name=".InteractiveDemoActivity" android:exported="false" android:configChanges="orientation|screenSize" />
+        <activity android:name=".GameSampleActivity" android:exported="false" android:configChanges="orientation|screenSize" />
+        <activity android:name=".LauncherSampleActivity" android:exported="false" android:configChanges="orientation|screenSize" />
+        <activity android:name=".CameraSampleActivity" android:exported="false" android:configChanges="orientation|screenSize" />
     </application>
 </manifest>

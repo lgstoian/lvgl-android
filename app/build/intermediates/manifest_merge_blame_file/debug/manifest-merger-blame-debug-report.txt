@@ -14,88 +14,122 @@
 12-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:3:19-62
 13        android:required="true" />
 13-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:3:63-86
-14
-15    <permission
-15-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
-16        android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-16-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
-17        android:protectionLevel="signature" />
-17-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
-18
-19    <uses-permission android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-19-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
-19-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
-20
-21    <application
-21-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:4:5-14:19
-22        android:allowBackup="true"
-22-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:5:9-35
-23        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-23-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
-24        android:debuggable="true"
-25        android:extractNativeLibs="false"
-26        android:icon="@mipmap/ic_launcher"
-26-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:6:9-43
-27        android:label="@string/app_name"
-27-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:7:9-41
-28        android:supportsRtl="true"
-28-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:8:9-35
-29        android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
-29-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-65
-30        <activity
-30-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:9-121
-31            android:name="com.lvgl.sample.MainActivity"
-31-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:19-47
-32            android:configChanges="orientation|screenSize"
-32-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:72-118
-33            android:exported="true" />
-33-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:48-71
-34        <activity
-34-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:11:9-132
-35            android:name="com.lvgl.sample.WidgetShowcaseActivity"
-35-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:11:19-57
-36            android:configChanges="orientation|screenSize"
-36-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:11:83-129
-37            android:exported="false" />
-37-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:11:58-82
-38        <activity
-38-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:12:9-132
-39            android:name="com.lvgl.sample.LayoutShowcaseActivity"
-39-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:12:19-57
-40            android:configChanges="orientation|screenSize"
-40-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:12:83-129
-41            android:exported="false" />
-41-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:12:58-82
-42        <activity
-42-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:9-133
-43            android:name="com.lvgl.sample.InteractiveDemoActivity"
-43-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:19-58
-44            android:configChanges="orientation|screenSize"
-44-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:84-130
-45            android:exported="false" />
-45-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:59-83
-46
-47        <provider
-47-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-48            android:name="androidx.startup.InitializationProvider"
-48-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
-49            android:authorities="com.lvgl.sample.androidx-startup"
-49-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
-50            android:exported="false" >
-50-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
-51            <meta-data
-51-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-52                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-52-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
-53                android:value="androidx.startup" />
-53-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
-54            <meta-data
-54-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:31:13-33:52
-55                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-55-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:32:17-78
-56                android:value="androidx.startup" />
-56-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:33:17-49
-57        </provider>
-58    </application>
-59
-60</manifest>
+14    <uses-feature
+14-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:4:5-85
+15        android:name="android.hardware.camera"
+15-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:4:19-57
+16        android:required="false" />
+16-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:4:58-82
+17
+18    <uses-permission android:name="android.permission.CAMERA" />
+18-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:5:5-65
+18-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:5:22-62
+19
+20    <permission
+20-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+21        android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+21-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+22        android:protectionLevel="signature" />
+22-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+23
+24    <uses-permission android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+24-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+24-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+25
+26    <application
+26-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:7:5-20:19
+27        android:allowBackup="true"
+27-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:8:9-35
+28        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+28-->[androidx.core:core:1.12.0] C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+29        android:debuggable="true"
+30        android:extractNativeLibs="false"
+31        android:icon="@mipmap/ic_launcher"
+31-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-43
+32        android:label="@string/app_name"
+32-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:9-41
+33        android:supportsRtl="true"
+33-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:11:9-35
+34        android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
+34-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:12:9-65
+35        <activity
+35-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:9-121
+36            android:name="com.lvgl.sample.MainActivity"
+36-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:19-47
+37            android:configChanges="orientation|screenSize"
+37-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:72-118
+38            android:exported="true" />
+38-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:13:48-71
+39        <activity
+39-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:14:9-132
+40            android:name="com.lvgl.sample.WidgetShowcaseActivity"
+40-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:14:19-57
+41            android:configChanges="orientation|screenSize"
+41-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:14:83-129
+42            android:exported="false" />
+42-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:14:58-82
+43        <activity
+43-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:15:9-132
+44            android:name="com.lvgl.sample.LayoutShowcaseActivity"
+44-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:15:19-57
+45            android:configChanges="orientation|screenSize"
+45-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:15:83-129
+46            android:exported="false" />
+46-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:15:58-82
+47        <activity
+47-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:16:9-133
+48            android:name="com.lvgl.sample.InteractiveDemoActivity"
+48-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:16:19-58
+49            android:configChanges="orientation|screenSize"
+49-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:16:84-130
+50            android:exported="false" />
+50-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:16:59-83
+51        <activity
+51-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:17:9-128
+52            android:name="com.lvgl.sample.GameSampleActivity"
+52-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:17:19-53
+53            android:configChanges="orientation|screenSize"
+53-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:17:79-125
+54            android:exported="false" />
+54-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:17:54-78
+55        <activity
+55-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:18:9-132
+56            android:name="com.lvgl.sample.LauncherSampleActivity"
+56-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:18:19-57
+57            android:configChanges="orientation|screenSize"
+57-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:18:83-129
+58            android:exported="false" />
+58-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:18:58-82
+59        <activity
+59-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:19:9-130
+60            android:name="com.lvgl.sample.CameraSampleActivity"
+60-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:19:19-55
+61            android:configChanges="orientation|screenSize"
+61-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:19:81-127
+62            android:exported="false" />
+62-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:19:56-80
+63
+64        <provider
+64-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+65            android:name="androidx.startup.InitializationProvider"
+65-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+66            android:authorities="com.lvgl.sample.androidx-startup"
+66-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+67            android:exported="false" >
+67-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+68            <meta-data
+68-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+69                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+69-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+70                android:value="androidx.startup" />
+70-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+71            <meta-data
+71-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:31:13-33:52
+72                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+72-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:32:17-78
+73                android:value="androidx.startup" />
+73-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:33:17-49
+74        </provider>
+75    </application>
+76
+77</manifest>

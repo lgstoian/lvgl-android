@@ -478,6 +478,7 @@ com.lvgl.sample:id/noState = 0x7f0800be
 com.lvgl.sample:style/TextAppearance.AppCompat.Light.Widget.PopupMenu.Large = 0x7f0e00cb
 com.lvgl.sample:id/neverCompleteToStart = 0x7f0800bd
 com.lvgl.sample:id/motion_base = 0x7f0800b9
+com.lvgl.sample:xml/accessibility_service_config = 0x7f100000
 com.lvgl.sample:color/error_color_material_dark = 0x7f05002f
 com.lvgl.sample:id/fragment_container_view_tag = 0x7f080093
 com.lvgl.sample:id/middle = 0x7f0800b8
