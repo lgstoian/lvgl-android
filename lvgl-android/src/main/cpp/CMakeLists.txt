@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22.1)
+﻿cmake_minimum_required(VERSION 3.22.1)
 project("lvgl_android")
 
 set(LVGL_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../lvgl)
@@ -54,3 +54,4 @@ target_compile_options(lvgl_android PRIVATE
     -Wno-sign-compare
     -Wno-missing-field-initializers
 )
+

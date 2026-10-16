@@ -72,6 +72,14 @@ class LvglEngine private constructor() {
 
     private external fun nativeApplyTheme(handle: Long, darkMode: Boolean, primaryColor: Int, secondaryColor: Int)
 
+    fun loadDemo(demoId: Int) {
+        if (isInitialized && nativeHandle != 0L) {
+            nativeLoadDemo(nativeHandle, demoId)
+        }
+    }
+
+    private external fun nativeLoadDemo(handle: Long, demoId: Int)
+
     companion object {
         private const val TAG = "LvglEngine"
 

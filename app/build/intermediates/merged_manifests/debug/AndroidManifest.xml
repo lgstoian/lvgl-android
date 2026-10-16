@@ -11,11 +11,6 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="true" />
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-
-    <uses-permission android:name="android.permission.CAMERA" />
 
     <permission
         android:name="com.lvgl.sample.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -34,32 +29,16 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
         <activity
             android:name="com.lvgl.sample.MainActivity"
-            android:configChanges="orientation|screenSize"
             android:exported="true" />
         <activity
             android:name="com.lvgl.sample.WidgetShowcaseActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
+            android:exported="true" />
         <activity
             android:name="com.lvgl.sample.LayoutShowcaseActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
+            android:exported="true" />
         <activity
             android:name="com.lvgl.sample.InteractiveDemoActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
-        <activity
-            android:name="com.lvgl.sample.GameSampleActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
-        <activity
-            android:name="com.lvgl.sample.LauncherSampleActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
-        <activity
-            android:name="com.lvgl.sample.CameraSampleActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false" />
+            android:exported="true" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"

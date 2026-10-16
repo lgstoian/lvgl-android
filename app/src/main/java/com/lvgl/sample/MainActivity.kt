@@ -1,17 +1,17 @@
-package com.lvgl.sample
+﻿package com.lvgl.sample
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.lvgl.android.activity.LvglActivity
+import androidx.appcompat.app.AppCompatActivity
 import com.lvgl.android.navigation.LvglNavigation
 
-class MainActivity : LvglActivity() {
+class MainActivity : AppCompatActivity() {
 
-    override fun onCreateLvgl() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         LvglNavigation.setMainActivity(this)
         setContentView(createMenuLayout())
     }
@@ -20,22 +20,26 @@ class MainActivity : LvglActivity() {
         val root = FrameLayout(this)
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
+        val title = TextView(this).apply {
+            text = "LVGL Android Framework"
+            textSize = 24f
+            setPadding(40, 40, 40, 20)
+        }
+        layout.addView(title)
+
         val items = listOf(
             "Widget Showcase" to WidgetShowcaseActivity::class.java,
             "Layout Showcase" to LayoutShowcaseActivity::class.java,
-            "Interactive Demo" to InteractiveDemoActivity::class.java,
-            "Game Sample" to GameSampleActivity::class.java,
-            "Launcher Sample" to LauncherSampleActivity::class.java,
-            "Camera Sample" to CameraSampleActivity::class.java
+            "Interactive Demo" to InteractiveDemoActivity::class.java
         )
 
-        items.forEach { (title, target) ->
+        items.forEach { (titleText, target) ->
             val tv = TextView(this).apply {
-                text = title
-                textSize = 20f
-                setPadding(40, 40, 40, 40)
+                text = titleText
+                textSize = 18f
+                setPadding(40, 30, 40, 30)
                 setOnClickListener {
-                    LvglNavigation.navigateTo(this@MainActivity, target)
+                    startActivity(android.content.Intent(this@MainActivity, target))
                 }
             }
             layout.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -43,16 +47,5 @@ class MainActivity : LvglActivity() {
 
         root.addView(layout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         return root
-    }
-
-    override fun onBackPressed() {
-        if (LvglNavigation.getBackStack().isNotEmpty()) {
-            LvglNavigation.popScreen()
-        }
-        super.onBackPressed()
-    }
-
-    companion object {
-        var currentDemo: Int = 0
     }
 }

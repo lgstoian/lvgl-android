@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.lvgl.android.GestureLogicTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-16T13:02:50" hostname="DESKTOP-GV0H9BK" time="0.009">
+  <properties/>
+  <testcase name="testGesturesSealed" classname="com.lvgl.android.GestureLogicTest" time="0.004"/>
+  <testcase name="testCustomConfig" classname="com.lvgl.android.GestureLogicTest" time="0.004"/>
+  <testcase name="testGestureConfig" classname="com.lvgl.android.GestureLogicTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

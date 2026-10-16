@@ -1,4 +1,6 @@
-#include "lvgl/lvgl.h"
+﻿#include "lvgl/lvgl.h"
+
+namespace lvgl_android {
 
 static void create_widget_showcase_ui() {
     lv_obj_t* screen = lv_screen_active();
@@ -49,9 +51,8 @@ static void create_layout_showcase_ui() {
     lv_obj_set_flex_flow(flex, LV_FLEX_FLOW_ROW_WRAP);
     lv_obj_set_flex_align(flex, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    const char* labels[] = {"A", "B", "C", "D"};
-    int i;
-    for (i = 0; i < 4; i++) {
+    static const char* labels[] = {"A", "B", "C", "D"};
+    for (int i = 0; i < 4; i++) {
         lv_obj_t* l = lv_label_create(flex);
         lv_label_set_text(l, labels[i]);
         lv_obj_set_style_bg_color(l, lv_color_hex(0x2196F3), 0);
@@ -59,7 +60,6 @@ static void create_layout_showcase_ui() {
         lv_obj_set_size(l, 40, 40);
         lv_obj_set_style_radius(l, 5, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(0xFFFFFF), 0);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     }
 }
 
@@ -88,8 +88,6 @@ static void create_interactive_ui() {
     lv_obj_align(info, LV_ALIGN_CENTER, 0, 20);
 }
 
-static void launch_demo_ui(int demo_id) {
-    if (demo_id == 0) create_widget_showcase_ui();
-    else if (demo_id == 1) create_layout_showcase_ui();
-    else if (demo_id == 2) create_interactive_ui();
-}
+void launch_demo_ui(int demo_id);
+
+} /* namespace lvgl_android */

@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "lvgl/lvgl.h"
+#include "demo_ui.h"
 
 #define LOG_TAG "LVGLPort"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -404,6 +405,17 @@ Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* env, jobject th
 
     LOGI("Theme applied: dark=%d primary=0x%06X secondary=0x%06X",
          darkMode, primaryColor, secondaryColor);
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeLoadDemo(JNIEnv* env, jobject thiz, jlong handle, jint demoId) {
+    (void)env;
+    (void)thiz;
+    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
+    if (!engine) return;
+
+    LOGI("Loading demo: %d", demoId);
+    lvgl_android::launch_demo_ui(demoId);
 }
 
 } /* extern "C" */
