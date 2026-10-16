@@ -29,11 +29,15 @@ jobs:
         export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
         export ANDROID_HOME=$ANDROID_SDK_ROOT
         yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" | tail -1
-        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1" | tail -1
-        NDK_PATH=$($ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --list_installed 2>/dev/null | grep ndk | awk '{print $NF}' | tail -1)
-        if [ -z "$NDK_PATH" ]; then NDK_PATH=$ANDROID_SDK_ROOT/ndk/26.1.10909125; fi
-        echo "NDK installed at: $NDK_PATH"
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" 2>&1 | tail -3
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1" 2>&1 | tail -3
+        NDK_PATH="$ANDROID_SDK_ROOT/ndk/26.1.10909125"
+        if [ ! -d "$NDK_PATH" ]; then
+          echo "NDK not found at expected path, searching..."
+          NDK_PATH=$(find $ANDROID_SDK_ROOT/ndk -maxdepth 1 -type d | head -1)
+        fi
+        echo "Using NDK at: $NDK_PATH"
+        sed -i '/^ndk.dir=/d' local.properties
         echo "ndk.dir=$NDK_PATH" >> local.properties
         cat local.properties
 
