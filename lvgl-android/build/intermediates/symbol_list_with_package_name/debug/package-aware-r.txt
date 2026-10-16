@@ -1,1 +1,2 @@
 com.lvgl.android
+xml accessibility_service_config
