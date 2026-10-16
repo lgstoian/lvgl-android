@@ -9,10 +9,10 @@ CMake Error at D:/ASDK/cmake/3.22.1-2/share/cmake-3.22/Modules/CMakeTestCCompile
 
     Change Dir: D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/x86_64/CMakeFiles/CMakeTmp
     
-    Run Build Command(s):D:\ASDK\cmake\3.22.1-2\bin\ninja.exe cmTC_fa41a && [1/2] Building C object CMakeFiles/cmTC_fa41a.dir/testCCompiler.c.o
-    [2/2] Linking C executable cmTC_fa41a
-    FAILED: cmTC_fa41a 
-    cmd.exe /C "cd . && D:\ASDK\ndk\android-ndk-r26b\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe --target=x86_64-none-linux-android24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments CMakeFiles/cmTC_fa41a.dir/testCCompiler.c.o -o cmTC_fa41a  -latomic -lm && cd ."
+    Run Build Command(s):D:\ASDK\cmake\3.22.1-2\bin\ninja.exe cmTC_1d4e4 && [1/2] Building C object CMakeFiles/cmTC_1d4e4.dir/testCCompiler.c.o
+    [2/2] Linking C executable cmTC_1d4e4
+    FAILED: cmTC_1d4e4 
+    cmd.exe /C "cd . && D:\ASDK\ndk\android-ndk-r26b\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe --target=x86_64-none-linux-android24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments CMakeFiles/cmTC_1d4e4.dir/testCCompiler.c.o -o cmTC_1d4e4  -latomic -lm && cd ."
     ld.lld: error: unable to find library -latomic
     ld.lld: error: cannot open D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-x86_64-android.a: No such file or directory
     ld.lld: error: unable to find library -l:libunwind.a

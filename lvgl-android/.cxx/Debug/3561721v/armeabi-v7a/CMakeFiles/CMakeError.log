@@ -1,0 +1,56 @@
+Detecting C compiler ABI info failed to compile with the following output:
+Change Dir: D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/armeabi-v7a/CMakeFiles/CMakeTmp
+
+Run Build Command(s):D:\ASDK\cmake\3.22.1-2\bin\ninja.exe cmTC_bb2a6 && [1/2] Building C object CMakeFiles/cmTC_bb2a6.dir/CMakeCCompilerABI.c.o
+Android (10552028, based on r487747d) clang version 17.0.2 (https://android.googlesource.com/toolchain/llvm-project d9f89f4d16663d5012e5c09495f3b30ece3d2362)
+Target: armv7-none-linux-android24
+Thread model: posix
+InstalledDir: D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin
+Found CUDA installation: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2, version 
+ (in-process)
+ "D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe" -cc1 -triple thumbv7-none-linux-android24 -emit-obj -mrelax-all -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCCompilerABI.c -mrelocation-model pic -pic-level 2 -pic-is-pie -mframe-pointer=all -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=1 -target-cpu generic -target-feature +soft-float-abi -target-feature +vfp2 -target-feature +vfp2sp -target-feature +vfp3 -target-feature +vfp3d16 -target-feature +vfp3d16sp -target-feature +vfp3sp -target-feature -fp16 -target-feature -vfp4 -target-feature -vfp4d16 -target-feature -vfp4d16sp -target-feature -vfp4sp -target-feature -fp-armv8 -target-feature -fp-armv8d16 -target-feature -fp-armv8d16sp -target-feature -fp-armv8sp -target-feature -fullfp16 -target-feature +fp64 -target-feature +d32 -target-feature +neon -target-feature -sha2 -target-feature -aes -target-feature -fp16fml -target-abi aapcs-linux -mfloat-abi soft -mllvm -treat-scalable-fixed-error-as-warning -debug-info-kind=constructor -dwarf-version=4 -debugger-tuning=gdb -v -ffunction-sections -fdata-sections "-fcoverage-compilation-dir=D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/armeabi-v7a/CMakeFiles/CMakeTmp" -resource-dir D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17 -dependency-file "CMakeFiles\\cmTC_bb2a6.dir\\CMakeCCompilerABI.c.o.d" -MT CMakeFiles/cmTC_bb2a6.dir/CMakeCCompilerABI.c.o -sys-header-deps -D ANDROID -D _FORTIFY_SOURCE=2 -isysroot D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -internal-isystem D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/include -internal-isystem D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/local/include -internal-externc-isystem D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/include/arm-linux-androideabi -internal-externc-isystem D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/include -internal-externc-isystem D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/include -Wformat "-fdebug-compilation-dir=D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/armeabi-v7a/CMakeFiles/CMakeTmp" -ferror-limit 19 -stack-protector 2 -fno-signed-char -fgnuc-version=4.2.1 -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_bb2a6.dir/CMakeCCompilerABI.c.o -x c D:/ASDK/cmake/3.22.1-2/share/cmake-3.22/Modules/CMakeCCompilerABI.c
+clang -cc1 version 17.0.2 based upon LLVM 17.0.2 default target x86_64-w64-windows-gnu
+ignoring nonexistent directory "D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/local/include"
+ignoring nonexistent directory "D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/include
+ D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/include/arm-linux-androideabi
+ D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/include
+End of search list.
+[2/2] Linking C executable cmTC_bb2a6
+FAILED: cmTC_bb2a6 
+cmd.exe /C "cd . && D:\ASDK\ndk\android-ndk-r26b\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe --target=armv7-none-linux-androideabi24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments   -v CMakeFiles/cmTC_bb2a6.dir/CMakeCCompilerABI.c.o -o cmTC_bb2a6   && cd ."
+Android (10552028, based on r487747d) clang version 17.0.2 (https://android.googlesource.com/toolchain/llvm-project d9f89f4d16663d5012e5c09495f3b30ece3d2362)
+Target: armv7-none-linux-android24
+Thread model: posix
+InstalledDir: D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin
+Found CUDA installation: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2, version 
+ "D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin/ld.lld" --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -pie -EL -z now -z relro -z max-page-size=4096 -X --hash-style=gnu --eh-frame-hdr -m armelf_linux_eabi -dynamic-linker /system/bin/linker -o cmTC_bb2a6 D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/arm-linux-androideabi/24/crtbegin_dynamic.o -LD:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/arm-linux-androideabi/24 -LD:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/arm-linux-androideabi -LD:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/../lib -LD:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib --build-id=sha1 --no-rosegment --no-undefined-version --fatal-warnings --no-undefined CMakeFiles/cmTC_bb2a6.dir/CMakeCCompilerABI.c.o D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a -l:libunwind.a -ldl -lc D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a -l:libunwind.a -ldl D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/arm-linux-androideabi/24/crtend_android.o
+ld.lld: error: cannot open D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a: No such file or directory
+ld.lld: error: unable to find library -l:libunwind.a
+ld.lld: error: cannot open D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a: No such file or directory
+ld.lld: error: unable to find library -l:libunwind.a
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+
+
+
+
+Determining if the C compiler works failed with the following output:
+Change Dir: D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/armeabi-v7a/CMakeFiles/CMakeTmp
+
+Run Build Command(s):D:\ASDK\cmake\3.22.1-2\bin\ninja.exe cmTC_d5393 && [1/2] Building C object CMakeFiles/cmTC_d5393.dir/testCCompiler.c.o
+[2/2] Linking C executable cmTC_d5393
+FAILED: cmTC_d5393 
+cmd.exe /C "cd . && D:\ASDK\ndk\android-ndk-r26b\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe --target=armv7-none-linux-androideabi24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments CMakeFiles/cmTC_d5393.dir/testCCompiler.c.o -o cmTC_d5393  -latomic -lm && cd ."
+ld.lld: error: unable to find library -latomic
+ld.lld: error: cannot open D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a: No such file or directory
+ld.lld: error: unable to find library -l:libunwind.a
+ld.lld: error: cannot open D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/lib/clang/17/lib/linux/libclang_rt.builtins-arm-android.a: No such file or directory
+ld.lld: error: unable to find library -l:libunwind.a
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+
+
+
