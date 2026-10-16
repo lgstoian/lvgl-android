@@ -1,0 +1,6 @@
+[
+    {
+        "merged": "com.lvgl.sample.app-mergeDebugResources-20:/layout/activity_main.xml",
+        "source": "com.lvgl.sample.app-main-23:/layout/activity_main.xml"
+    }
+]

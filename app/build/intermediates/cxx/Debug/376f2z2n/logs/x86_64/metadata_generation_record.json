@@ -1,0 +1,119 @@
+[
+  {
+    "level_": 0,
+    "message_": "Start JSON generation. Platform version: 24 min SDK version: x86_64",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "rebuilding JSON D:\\Code\\android lvgl\\app\\.cxx\\Debug\\376f2z2n\\x86_64\\android_gradle_build.json due to:",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "- no fingerprint file, will remove stale configuration folder",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "removing stale contents from \u0027D:\\Code\\android lvgl\\app\\.cxx\\Debug\\376f2z2n\\x86_64\u0027",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "created folder \u0027D:\\Code\\android lvgl\\app\\.cxx\\Debug\\376f2z2n\\x86_64\u0027",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "executing cmake @echo off\n\"D:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n  \"-HD:\\\\Code\\\\android lvgl\\\\app\\\\src\\\\main\\\\cpp\" ^\n  \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n  \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n  \"-DCMAKE_SYSTEM_VERSION\u003d24\" ^\n  \"-DANDROID_ABI\u003dx86_64\" ^\n  \"-DCMAKE_ANDROID_ARCH_ABI\u003dx86_64\" ^\n  \"-DANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n  \"-DCMAKE_ANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n  \"-DCMAKE_TOOLCHAIN_FILE\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n  \"-DCMAKE_MAKE_PROGRAM\u003dD:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n  \"-DCMAKE_CXX_FLAGS\u003d-std\u003dc++17\" ^\n  \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n  \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n  \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n  \"-BD:\\\\Code\\\\android lvgl\\\\app\\\\.cxx\\\\Debug\\\\376f2z2n\\\\x86_64\" ^\n  -GNinja ^\n  \"-DANDROID_STL\u003dc++_shared\" ^\n  \"-DANDROID_PLATFORM\u003dandroid-24\"\n",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "@echo off\n\"D:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n  \"-HD:\\\\Code\\\\android lvgl\\\\app\\\\src\\\\main\\\\cpp\" ^\n  \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n  \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n  \"-DCMAKE_SYSTEM_VERSION\u003d24\" ^\n  \"-DANDROID_ABI\u003dx86_64\" ^\n  \"-DCMAKE_ANDROID_ARCH_ABI\u003dx86_64\" ^\n  \"-DANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n  \"-DCMAKE_ANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n  \"-DCMAKE_TOOLCHAIN_FILE\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n  \"-DCMAKE_MAKE_PROGRAM\u003dD:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n  \"-DCMAKE_CXX_FLAGS\u003d-std\u003dc++17\" ^\n  \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n  \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n  \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n  \"-BD:\\\\Code\\\\android lvgl\\\\app\\\\.cxx\\\\Debug\\\\376f2z2n\\\\x86_64\" ^\n  -GNinja ^\n  \"-DANDROID_STL\u003dc++_shared\" ^\n  \"-DANDROID_PLATFORM\u003dandroid-24\"\n",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "Received process result: 1",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "JSON generation completed with problem. Exception: com.android.ide.common.process.ProcessException: C++ build system [configure] failed while executing:\n    @echo off\n    \"D:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n      \"-HD:\\\\Code\\\\android lvgl\\\\app\\\\src\\\\main\\\\cpp\" ^\n      \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n      \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n      \"-DCMAKE_SYSTEM_VERSION\u003d24\" ^\n      \"-DANDROID_ABI\u003dx86_64\" ^\n      \"-DCMAKE_ANDROID_ARCH_ABI\u003dx86_64\" ^\n      \"-DANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n      \"-DCMAKE_ANDROID_NDK\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\" ^\n      \"-DCMAKE_TOOLCHAIN_FILE\u003dD:\\\\ASDK\\\\ndk\\\\android-ndk-r26b\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n      \"-DCMAKE_MAKE_PROGRAM\u003dD:\\\\ASDK\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n      \"-DCMAKE_CXX_FLAGS\u003d-std\u003dc++17\" ^\n      \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n      \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\\\Code\\\\android lvgl\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\376f2z2n\\\\obj\\\\x86_64\" ^\n      \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n      \"-BD:\\\\Code\\\\android lvgl\\\\app\\\\.cxx\\\\Debug\\\\376f2z2n\\\\x86_64\" ^\n      -GNinja ^\n      \"-DANDROID_STL\u003dc++_shared\" ^\n      \"-DANDROID_PLATFORM\u003dandroid-24\"\n  from D:\\Code\\android lvgl\\app\nCMake Error: Could not find CMAKE_ROOT !!!\nCMake has most likely not been installed correctly.\nModules directory not found in\nD:/ASDK/cmake/3.22.1/share/cmake-3.22\nCMake Error: Error executing cmake::LoadCache(). Aborting.",
+    "file_": "D:\\Code\\android lvgl\\app\\src\\main\\cpp\\CMakeLists.txt",
+    "tag_": "debug|x86_64",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  }
+]

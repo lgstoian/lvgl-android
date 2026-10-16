@@ -1,0 +1,24 @@
+com.lvgl.sample.app-emoji2-views-helper-1.2.0-0 C:\Users\lgstoian\.gradle\caches\transforms-3\1d4074c463b58e011d8b5bf1fca888c3\transformed\emoji2-views-helper-1.2.0\res
+com.lvgl.sample.app-lifecycle-viewmodel-2.5.1-1 C:\Users\lgstoian\.gradle\caches\transforms-3\386d287c6dc4f6007e911d043c7d3814\transformed\lifecycle-viewmodel-2.5.1\res
+com.lvgl.sample.app-lifecycle-livedata-core-2.5.1-2 C:\Users\lgstoian\.gradle\caches\transforms-3\4df3b50795aba22aefbfac8a43efd8d2\transformed\lifecycle-livedata-core-2.5.1\res
+com.lvgl.sample.app-appcompat-resources-1.6.1-3 C:\Users\lgstoian\.gradle\caches\transforms-3\4ed38f9fd24934a094a49921a1dbb1f3\transformed\appcompat-resources-1.6.1\res
+com.lvgl.sample.app-startup-runtime-1.1.1-4 C:\Users\lgstoian\.gradle\caches\transforms-3\59a4434d1e0e5c03ab932670cd474a10\transformed\startup-runtime-1.1.1\res
+com.lvgl.sample.app-activity-1.6.0-5 C:\Users\lgstoian\.gradle\caches\transforms-3\72773b881cf4bb4939ba7023e292ec09\transformed\activity-1.6.0\res
+com.lvgl.sample.app-emoji2-1.2.0-6 C:\Users\lgstoian\.gradle\caches\transforms-3\82380c2ef295209c75a147cd78bbfc27\transformed\emoji2-1.2.0\res
+com.lvgl.sample.app-appcompat-1.6.1-7 C:\Users\lgstoian\.gradle\caches\transforms-3\82449e3139048e3a21330111b315b0fc\transformed\appcompat-1.6.1\res
+com.lvgl.sample.app-fragment-1.3.6-8 C:\Users\lgstoian\.gradle\caches\transforms-3\93215345f2e1555c31cfe49094917a09\transformed\fragment-1.3.6\res
+com.lvgl.sample.app-savedstate-1.2.0-9 C:\Users\lgstoian\.gradle\caches\transforms-3\974bb915e2498ded02e2c8a935984c28\transformed\savedstate-1.2.0\res
+com.lvgl.sample.app-lifecycle-process-2.4.1-10 C:\Users\lgstoian\.gradle\caches\transforms-3\9fe42510bcb7c0257b1988e74b6d9a37\transformed\lifecycle-process-2.4.1\res
+com.lvgl.sample.app-core-ktx-1.12.0-11 C:\Users\lgstoian\.gradle\caches\transforms-3\ba2ba087a96411c428138f7fd4df14c0\transformed\core-ktx-1.12.0\res
+com.lvgl.sample.app-lifecycle-runtime-2.5.1-12 C:\Users\lgstoian\.gradle\caches\transforms-3\c133eea790d940babab32f531117b2c2\transformed\lifecycle-runtime-2.5.1\res
+com.lvgl.sample.app-constraintlayout-2.1.4-13 C:\Users\lgstoian\.gradle\caches\transforms-3\d7ab982a221341d282e2f0d6fc4f2d8c\transformed\constraintlayout-2.1.4\res
+com.lvgl.sample.app-core-1.12.0-14 C:\Users\lgstoian\.gradle\caches\transforms-3\e301ef7b03c70a30fa9dbfc1c07bd30d\transformed\core-1.12.0\res
+com.lvgl.sample.app-annotation-experimental-1.3.0-15 C:\Users\lgstoian\.gradle\caches\transforms-3\ec0af8b4766bdd2915b00a5e1928a896\transformed\annotation-experimental-1.3.0\res
+com.lvgl.sample.app-lifecycle-viewmodel-savedstate-2.5.1-16 C:\Users\lgstoian\.gradle\caches\transforms-3\f145ab78e8473922265d270e9c1fcb8f\transformed\lifecycle-viewmodel-savedstate-2.5.1\res
+com.lvgl.sample.app-pngs-17 D:\Code\android lvgl\app\build\generated\res\pngs\debug
+com.lvgl.sample.app-resValues-18 D:\Code\android lvgl\app\build\generated\res\resValues\debug
+com.lvgl.sample.app-packageDebugResources-19 D:\Code\android lvgl\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.lvgl.sample.app-packageDebugResources-20 D:\Code\android lvgl\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.lvgl.sample.app-merged_res-21 D:\Code\android lvgl\app\build\intermediates\merged_res\debug
+com.lvgl.sample.app-debug-22 D:\Code\android lvgl\app\src\debug\res
+com.lvgl.sample.app-main-23 D:\Code\android lvgl\app\src\main\res

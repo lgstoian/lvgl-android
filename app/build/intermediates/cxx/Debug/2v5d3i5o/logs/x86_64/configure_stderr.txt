@@ -1,0 +1,6 @@
+CMake Error: Could not find CMAKE_ROOT !!!
+CMake has most likely not been installed correctly.
+Modules directory not found in
+D:/ASDK/cmake/3.25.1/share/cmake-3.25
+CMake Error: Error executing cmake::LoadCache(). Aborting.
+

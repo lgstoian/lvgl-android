@@ -1,0 +1,2 @@
+ninja: Entering directory `D:\Code\android lvgl\app\.cxx\Debug\632gv5eb\x86_64'
+ninja: no work to do.
