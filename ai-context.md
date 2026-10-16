@@ -42,13 +42,25 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 Copy-Item "D:\ASDK\cmake\3.22.1-2\share" "D:\ASDK\cmake\3.22.1\" -Recurse -Force
 ```
 
-### NDK r26b + x86_64 Build Failure
+### NDK r26b + x86_64/armeabi-v7a Build Failure
 
-**Problem**: NDK r26b with Clang 17 cannot link x86_64 binaries with CMake 3.22.1.
+**Problem**: NDK r26b with Clang 17 cannot link x86_64 or armeabi-v7a binaries with CMake 3.22.1.
 
-**Symptom**: `ld.lld: error: unable to find library -latomic`
+**Symptom**: `ld.lld: error: unable to find library -latomic` or missing `libclang_rt.builtins-arm-android.a`
 
-**Solution**: Build only for arm64-v8a ABI. x86_64 requires CMake 3.25+.
+**Solution**: Build only for arm64-v8a ABI. x86_64 requires CMake 3.25+. armeabi-v7a missing builtins lib.
+
+### Demo Activity setContentView Conflict
+
+**Problem**: Demo activities that extend LvglActivity called `setContentView()` with native Android views, replacing the LVGL SurfaceView and causing greyed out "system UI isn't responding" screen.
+
+**Solution**: Activities extending LvglActivity must NOT call `setContentView()`. Use `loadDemo(id)` to switch LVGL content instead. Use `AppCompatActivity` for native Android views.
+
+### MotionEvent Requires Robolectric
+
+**Problem**: Unit tests using `MotionEvent.obtain()` fail with "not mocked" error.
+
+**Solution**: Use `androidTest` (instrumented tests) for MotionEvent-dependent code. Pure logic tests can use `test` source set without Android framework.
 
 ## LVGL Integration
 
