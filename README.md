@@ -1,5 +1,9 @@
 # LVGL Android Framework
 
+[![CI](https://github.com/lgstoian/lvgl-android/actions/workflows/ci.yml/badge.svg)](https://github.com/lgstoian/lvgl-android/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![LVGL v9.6.0](https://img.shields.io/badge/LVGL-v9.6.0-blue.svg)](https://github.com/lvgl/lvgl)
+
 A framework for building small, efficient Android applications using [LVGL (Light and Versatile Graphics Library)](https://lvgl.io/) v9.6.0.
 
 ## Overview
