@@ -1,4 +1,10 @@
+﻿
 package com.lvgl.android.activity
+
+import com.lvgl.android.engine.LvglEngine
+
+import com.lvgl.android.view.LvglSurfaceView
+
 
 import android.content.res.Configuration
 import android.os.Bundle
@@ -7,10 +13,8 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.lvgl.android.config.DisplayMetricsManager
-import com.lvgl.android.engine.LvglEngine
 import com.lvgl.android.theme.MaterialTheme
 import com.lvgl.android.theme.LvglThemeBridge
-import com.lvgl.android.view.LvglSurfaceView
 
 abstract class LvglActivity : AppCompatActivity(),
     MaterialTheme.OnThemeChangedListener,
@@ -99,3 +103,10 @@ abstract class LvglActivity : AppCompatActivity(),
         private const val TAG = "LvglActivity"
     }
 }
+
+
+
+
+
+
+

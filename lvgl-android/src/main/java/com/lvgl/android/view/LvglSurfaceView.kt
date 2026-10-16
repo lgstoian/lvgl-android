@@ -1,5 +1,5 @@
 package com.lvgl.android.view
-
+import com.lvgl.android.engine.LvglEngine
 import android.content.Context
 import android.graphics.PixelFormat
 import android.util.AttributeSet
@@ -7,7 +7,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import com.lvgl.android.engine.LvglEngine
+
 
 class LvglSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -58,43 +58,39 @@ class LvglSurfaceView @JvmOverloads constructor(
 
         when (action) {
             MotionEvent.ACTION_DOWN,
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                engine.onTouchEvent(0, x, y)
-            }
+            MotionEvent.ACTION_POINTER_DOWN -> { engine.onTouchEvent(0, x, y) }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP,
-            MotionEvent.ACTION_CANCEL -> {
-                engine.onTouchEvent(1, x, y)
-            }
-            MotionEvent.ACTION_MOVE -> {
-                engine.onTouchEvent(2, x, y)
-            }
+            MotionEvent.ACTION_CANCEL -> { engine.onTouchEvent(1, x, y) }
+            MotionEvent.ACTION_MOVE -> { engine.onTouchEvent(2, x, y) }
         }
 
         return true
     }
 
     fun onResume() {
-        if (nativeInitialized) {
-            engine.resume()
-        }
+        if (nativeInitialized) { engine.resume() }
     }
 
     fun onPause() {
-        if (nativeInitialized) {
-            engine.pause()
-        }
+        if (nativeInitialized) { engine.pause() }
     }
 
     fun destroy() {
-        if (nativeInitialized) {
-            engine.deinitDisplay()
-            nativeInitialized = false
-        }
+        if (nativeInitialized) { engine.deinitDisplay(); nativeInitialized = false }
         engine.shutdown()
     }
+
+    fun applyTheme(darkMode: Boolean) {
+        engine.applyTheme(darkMode, engineThemePrimary, engineThemeSecondary)
+    }
+
+    private val engineThemePrimary = 0x1976D2
+    private val engineThemeSecondary = 0xDC004E
 
     companion object {
         private const val TAG = "LvglSurfaceView"
     }
 }
+
+

@@ -21,6 +21,7 @@ file(GLOB_RECURSE LVGL_SOURCES
 
 file(GLOB APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.c
 )
 
 add_library(lvgl_android SHARED

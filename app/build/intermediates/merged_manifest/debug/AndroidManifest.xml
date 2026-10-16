@@ -29,15 +29,20 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
         <activity
             android:name="com.lvgl.sample.MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:exported="true"
-            android:windowSoftInputMode="adjustResize" >
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:configChanges="orientation|screenSize"
+            android:exported="true" />
+        <activity
+            android:name="com.lvgl.sample.WidgetShowcaseActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+        <activity
+            android:name="com.lvgl.sample.LayoutShowcaseActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+        <activity
+            android:name="com.lvgl.sample.InteractiveDemoActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"

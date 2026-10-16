@@ -2416,6 +2416,11 @@
 },
 {
   "directory": "D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/arm64-v8a",
+  "command": "D:\\ASDK\\ndk\\android-ndk-r26b\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe --target=aarch64-none-linux-android24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -DLV_CONF_INCLUDE_SIMPLE -DLV_KCONFIG_IGNORE -Dlvgl_android_EXPORTS -I\"D:/Code/android lvgl/lvgl-android/src/main/cpp/../../../../lvgl/include\" -I\"D:/Code/android lvgl/lvgl-android/src/main/cpp\" -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -o CMakeFiles\\lvgl_android.dir\\demo_ui.c.o -c \"D:\\Code\\android lvgl\\lvgl-android\\src\\main\\cpp\\demo_ui.c\"",
+  "file": "D:\\Code\\android lvgl\\lvgl-android\\src\\main\\cpp\\demo_ui.c"
+},
+{
+  "directory": "D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/arm64-v8a",
   "command": "D:\\ASDK\\ndk\\android-ndk-r26b\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe --target=aarch64-none-linux-android24 --sysroot=D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/sysroot -DLV_CONF_INCLUDE_SIMPLE -DLV_KCONFIG_IGNORE -Dlvgl_android_EXPORTS -I\"D:/Code/android lvgl/lvgl-android/src/main/cpp/../../../../lvgl/include\" -I\"D:/Code/android lvgl/lvgl-android/src/main/cpp\" -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -fno-limit-debug-info  -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -o CMakeFiles\\lvgl_android.dir\\lvgl_port.cpp.o -c \"D:\\Code\\android lvgl\\lvgl-android\\src\\main\\cpp\\lvgl_port.cpp\"",
   "file": "D:\\Code\\android lvgl\\lvgl-android\\src\\main\\cpp\\lvgl_port.cpp"
 }
