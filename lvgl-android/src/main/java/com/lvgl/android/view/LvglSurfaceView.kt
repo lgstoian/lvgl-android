@@ -1,4 +1,4 @@
-package com.lvgl.android.view
+﻿package com.lvgl.android.view
 import com.lvgl.android.engine.LvglEngine
 import android.content.Context
 import android.graphics.PixelFormat
@@ -9,7 +9,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 
 
-class LvglSurfaceView @JvmOverloads constructor(
+open class LvglSurfaceView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
@@ -92,5 +92,6 @@ class LvglSurfaceView @JvmOverloads constructor(
         private const val TAG = "LvglSurfaceView"
     }
 }
+
 
 
