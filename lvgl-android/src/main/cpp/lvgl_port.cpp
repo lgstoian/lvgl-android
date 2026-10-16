@@ -61,17 +61,28 @@ static void copy_pixels_rb_swap(uint8_t* dst, const uint8_t* src, uint32_t pixel
     }
 }
 
+static int flush_count = 0;
+
 static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
     (void)area;
 
+    flush_count++;
+    if (flush_count <= 3 || flush_count % 60 == 0) {
+        LOGI("display_flush_cb #%d area=(%d,%d,%d,%d)", flush_count,
+             area ? area->x1 : -1, area ? area->y1 : -1,
+             area ? area->x2 : -1, area ? area->y2 : -1);
+    }
+
     auto* engine = static_cast<Engine*>(lv_display_get_user_data(disp));
     if (!engine || !engine->nativeWindow) {
+        LOGI("display_flush_cb: no engine or window (flush #%d)", flush_count);
         lv_display_flush_ready(disp);
         return;
     }
 
     ANativeWindow_Buffer buffer;
-    if (ANativeWindow_lock(engine->nativeWindow, &buffer, nullptr) < 0) {
+    ARect bounds = {0, 0, (int32_t)engine->dispWidth, (int32_t)engine->dispHeight};
+    if (ANativeWindow_lock(engine->nativeWindow, &buffer, &bounds) < 0) {
         lv_display_flush_ready(disp);
         return;
     }
@@ -269,6 +280,14 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject t
     engine->dispHeight = height;
     engine->bufferLogged = false;
 
+    // Set the buffer geometry to match our rendering format
+    // RGBA_8888 (format 5) is required for proper R/B swap compatibility
+    int32_t ret = ANativeWindow_setBuffersGeometry(engine->nativeWindow,
+        width, height, WINDOW_FORMAT_RGBA_8888);
+    if (ret < 0) {
+        LOGE("Failed to set buffer geometry: %d", ret);
+    }
+
     lv_init();
     lv_tick_set_cb(lvgl_android::tick_get_cb);
 
@@ -293,8 +312,8 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject t
         return;
     }
 
-    memset(engine->fb1, 0xFF, buf_size);
-    memset(engine->fb2, 0xFF, buf_size);
+    memset(engine->fb1, 0x00, buf_size);
+    memset(engine->fb2, 0x00, buf_size);
 
     lv_display_set_buffers(engine->display, engine->fb1, engine->fb2, buf_size, LV_DISPLAY_RENDER_MODE_DIRECT);
     lv_display_set_flush_cb(engine->display, lvgl_android::display_flush_cb);
@@ -305,11 +324,17 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject t
     lv_indev_set_read_cb(engine->indev, lvgl_android::touch_read_cb);
     lv_indev_set_user_data(engine->indev, engine);
 
-    lv_theme_default_init(engine->display, lv_palette_main(LV_PALETTE_BLUE),
-                          lv_palette_main(LV_PALETTE_RED),
-                          LV_THEME_DEFAULT_DARK, LV_FONT_DEFAULT);
+    // Don't call lv_theme_default_init — it overrides our styles
+    // Instead, set default colors directly on the active screen
 
     onCreateLvgl(engine);
+
+    // Force a full-screen refresh AFTER UI is created
+    // This triggers display_flush_cb with actual rendered content
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(engine->display);
+
+    engine->running = true;
 
     engine->running = true;
     engine->paused = false;
@@ -317,101 +342,6 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject t
     engine->lvglThread = std::thread(lvgl_android::lvgl_thread_func, engine);
 
     LOGI("LVGL initialized successfully");
-}
-
-JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* env, jobject thiz, jlong handle) {
-    (void)env;
-    (void)thiz;
-    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
-    if (!engine) return;
-
-    LOGI("nativeDeinitDisplay");
-
-    engine->running = false;
-    engine->cv.notify_all();
-
-    if (engine->lvglThread.joinable()) {
-        engine->lvglThread.join();
-    }
-
-    if (engine->display) {
-        lv_display_delete(engine->display);
-        engine->display = nullptr;
-    }
-
-    delete[] engine->fb1;
-    delete[] engine->fb2;
-    engine->fb1 = nullptr;
-    engine->fb2 = nullptr;
-
-    if (engine->nativeWindow) {
-        ANativeWindow_release(engine->nativeWindow);
-        engine->nativeWindow = nullptr;
-    }
-
-    lv_deinit();
-    engine->initialized = false;
-    LOGI("LVGL deinitialized");
-}
-
-JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeResume(JNIEnv* env, jobject thiz, jlong handle) {
-    (void)env;
-    (void)thiz;
-    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
-    if (!engine) return;
-    LOGI("nativeResume");
-    engine->paused = false;
-}
-
-JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativePause(JNIEnv* env, jobject thiz, jlong handle) {
-    (void)env;
-    (void)thiz;
-    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
-    if (!engine) return;
-    LOGI("nativePause");
-    engine->paused = true;
-}
-
-JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeTouchEvent(JNIEnv* env, jobject thiz, jlong handle,
-                                                          jint action, jfloat x, jfloat y) {
-    (void)env;
-    (void)thiz;
-    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
-    if (!engine) return;
-
-    std::lock_guard<std::mutex> lock(engine->touchMutex);
-    engine->touchPoint.x = (lv_coord_t)x;
-    engine->touchPoint.y = (lv_coord_t)y;
-    engine->touchNew = true;
-
-    if (action == 0) {
-        engine->touchState = LV_INDEV_STATE_PRESSED;
-    } else if (action == 1) {
-        engine->touchState = LV_INDEV_STATE_RELEASED;
-    }
-}
-
-JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* env, jobject thiz, jlong handle,
-                                                          jboolean darkMode, jint primaryColor,
-                                                          jint secondaryColor) {
-    (void)env;
-    (void)thiz;
-    auto* engine = reinterpret_cast<lvgl_android::Engine*>(handle);
-    if (!engine || !engine->display) return;
-
-    lv_theme_default_init(engine->display,
-                          lv_palette_main(LV_PALETTE_BLUE),
-                          lv_palette_main(LV_PALETTE_RED),
-                          darkMode ? LV_THEME_DEFAULT_DARK : 0,
-                          LV_FONT_DEFAULT);
-
-    LOGI("Theme applied: dark=%d primary=0x%06X secondary=0x%06X",
-         darkMode, primaryColor, secondaryColor);
 }
 
 JNIEXPORT void JNICALL
@@ -426,4 +356,5 @@ Java_com_lvgl_android_engine_LvglEngine_nativeLoadDemo(JNIEnv* env, jobject thiz
 }
 
 } /* extern "C" */
+
 

@@ -38,6 +38,21 @@ abstract class LvglActivity : AppCompatActivity(),
         super.onCreate(savedInstanceState)
         Log.d(TAG, "onCreate")
 
+        // Set dark window background to match LVGL dark theme and prevent
+        // Android's light theme from showing through transparent SurfaceView areas
+        window.setBackgroundDrawableResource(android.R.color.black)
+
+        // Make the window fullscreen (hide status bar and navigation bar)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+            or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
+
         val engine = LvglEngine.instance
         engine.initialize()
 
@@ -52,6 +67,7 @@ abstract class LvglActivity : AppCompatActivity(),
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            setBackgroundColor(android.graphics.Color.BLACK)
         }
 
         lvglView = LvglSurfaceView(this).apply {
@@ -59,6 +75,9 @@ abstract class LvglActivity : AppCompatActivity(),
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            setBackgroundColor(android.graphics.Color.BLACK)
+            setZOrderOnTop(true)
+            holder.setFormat(android.graphics.PixelFormat.RGBA_8888)
         }
 
         rootLayout.addView(lvglView)

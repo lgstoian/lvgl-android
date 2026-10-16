@@ -40,8 +40,8 @@
 27-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:7:9-41
 28        android:supportsRtl="true"
 28-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:8:9-35
-29        android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
-29-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-65
+29        android:theme="@style/Theme.AppCompat.NoActionBar" >
+29-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-59
 30        <activity
 30-->D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:9-74
 31            android:name="com.lvgl.sample.MainActivity"

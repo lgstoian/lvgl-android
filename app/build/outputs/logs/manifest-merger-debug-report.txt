@@ -77,7 +77,7 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\lgstoian\.gradle\c
 	android:allowBackup
 		ADDED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:5:9-35
 	android:theme
-		ADDED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-65
+		ADDED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:9:9-59
 activity#com.lvgl.sample.MainActivity
 ADDED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:10:9-74
 	android:exported
