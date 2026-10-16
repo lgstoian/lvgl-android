@@ -1,0 +1,9 @@
+-- The C compiler identification is Clang 17.0.2
+-- The CXX compiler identification is Clang 17.0.2
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - failed
+-- Check for working C compiler: D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe
+-- Check for working C compiler: D:/ASDK/ndk/android-ndk-r26b/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe - broken
+-- Configuring incomplete, errors occurred!
+See also "D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/x86_64/CMakeFiles/CMakeOutput.log".
+See also "D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/x86_64/CMakeFiles/CMakeError.log".

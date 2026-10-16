@@ -17,17 +17,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        externalNativeBuild {
-            cmake {
-                cppFlags("-std=c++17")
-                arguments(
-                    "-DANDROID_STL=c++_shared",
-                    "-DANDROID_PLATFORM=android-24"
-                )
-                abiFilters("arm64-v8a")
-            }
-        }
-
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -40,14 +29,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            ndk {
-                debugSymbolLevel = "none"
-            }
-        }
-        debug {
-            ndk {
-                debugSymbolLevel = "full"
-            }
         }
     }
 
@@ -63,16 +44,10 @@ android {
     buildFeatures {
         viewBinding = true
     }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
 }
 
 dependencies {
+    implementation(project(":lvgl-android"))
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")

@@ -22,3 +22,4 @@ com.lvgl.sample.app-packageDebugResources-20 D:\Code\android lvgl\app\build\inte
 com.lvgl.sample.app-merged_res-21 D:\Code\android lvgl\app\build\intermediates\merged_res\debug
 com.lvgl.sample.app-debug-22 D:\Code\android lvgl\app\src\debug\res
 com.lvgl.sample.app-main-23 D:\Code\android lvgl\app\src\main\res
+com.lvgl.sample.app-packaged_res-24 D:\Code\android lvgl\lvgl-android\build\intermediates\packaged_res\debug

@@ -1,0 +1,3 @@
+D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/arm64-v8a/CMakeFiles/lvgl_android.dir
+D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/Code/android lvgl/lvgl-android/.cxx/Debug/3561721v/arm64-v8a/CMakeFiles/rebuild_cache.dir

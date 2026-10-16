@@ -1,5 +1,20 @@
 # Development Guide
 
+## Important: Known Issues & Quirks
+
+**Before troubleshooting any build issues, read [ai-context.md](ai-context.md)** which documents all known quirks, oddities, and their resolutions discovered during development. Key issues include:
+
+- Emulator binary path: `D:\ASDK\emulator\emulator.exe` (NOT `D:\ASDK\platform-tools\arrom`)
+- ADB unauthorized after key deletion: use `-wipe-data` flag
+- CMake `share/cmake-X.Y` directory missing from GitHub releases
+- NDK r26b + CMake 3.22.1 x86_64 incompatibility
+- Emulator slow boot: wait 3+ minutes for `sys.boot_completed=1`
+- LVGL 9.x header structure, color format, user data APIs
+- Kotlin/JNI naming conflicts
+- Emulator command reference with working patterns
+
+If you encounter an issue, check `ai-context.md` first. If you discover a new issue not documented there, add it to `ai-context.md` with the problem, symptom, root cause, and resolution.
+
 ## Project Overview
 
 This project ports LVGL v9.6.0 to Android. The native code renders LVGL graphics to an Android `SurfaceView` via JNI.

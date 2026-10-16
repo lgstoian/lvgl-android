@@ -1,0 +1,40 @@
+{
+  "buildFiles": [
+    "D:\\Code\\android lvgl\\lvgl-android\\src\\main\\cpp\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "D:\\ASDK\\cmake\\3.22.1-2\\bin\\ninja.exe",
+      "-C",
+      "D:\\Code\\android lvgl\\lvgl-android\\.cxx\\Debug\\3561721v\\arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "D:\\ASDK\\cmake\\3.22.1-2\\bin\\ninja.exe",
+    "-C",
+    "D:\\Code\\android lvgl\\lvgl-android\\.cxx\\Debug\\3561721v\\arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "lvgl_android::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "lvgl_android",
+      "output": "D:\\Code\\android lvgl\\lvgl-android\\build\\intermediates\\cxx\\Debug\\3561721v\\obj\\arm64-v8a\\liblvgl_android.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "D:\\ASDK\\ndk\\android-ndk-r26b\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+      "cppCompilerExecutable": "D:\\ASDK\\ndk\\android-ndk-r26b\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe"
+    }
+  },
+  "cFileExtensions": [
+    "c"
+  ],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

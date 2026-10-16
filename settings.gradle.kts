@@ -14,5 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LvglSample"
+rootProject.name = "LvglAndroid"
 include(":app")
+include(":lvgl-android")

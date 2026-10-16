@@ -4,6 +4,7 @@ ADDED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:2:1-24:12
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:2:1-24:12
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:2:1-24:12
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml:2:1-24:12
+MERGED from [:lvgl-android] D:\Code\android lvgl\lvgl-android\build\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.databinding:viewbinding:8.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\3157ea282ef600d783677085cbb4bef6\transformed\viewbinding-8.2.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\lgstoian\.gradle\caches\transforms-3\d7ab982a221341d282e2f0d6fc4f2d8c\transformed\constraintlayout-2.1.4\AndroidManifest.xml:2:1-11:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] C:\Users\lgstoian\.gradle\caches\transforms-3\4ed38f9fd24934a094a49921a1dbb1f3\transformed\appcompat-resources-1.6.1\AndroidManifest.xml:17:1-22:12
@@ -101,6 +102,8 @@ uses-sdk
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml
 INJECTED from D:\Code\android lvgl\app\src\main\AndroidManifest.xml
+MERGED from [:lvgl-android] D:\Code\android lvgl\lvgl-android\build\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:lvgl-android] D:\Code\android lvgl\lvgl-android\build\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
 MERGED from [androidx.databinding:viewbinding:8.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\3157ea282ef600d783677085cbb4bef6\transformed\viewbinding-8.2.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.databinding:viewbinding:8.2.0] C:\Users\lgstoian\.gradle\caches\transforms-3\3157ea282ef600d783677085cbb4bef6\transformed\viewbinding-8.2.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\lgstoian\.gradle\caches\transforms-3\d7ab982a221341d282e2f0d6fc4f2d8c\transformed\constraintlayout-2.1.4\AndroidManifest.xml:5:5-7:41

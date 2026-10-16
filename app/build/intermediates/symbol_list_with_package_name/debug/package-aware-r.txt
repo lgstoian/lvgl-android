@@ -1094,7 +1094,6 @@ id line3
 id linear
 id listMode
 id list_item
-id lvglView
 id match_constraint
 id match_parent
 id message
