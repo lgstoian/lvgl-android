@@ -1,134 +1,161 @@
-# LVGL on Android
+# LVGL Android Framework
 
-A port of [LVGL (Light and Versatile Graphics Library)](https://lvgl.io/) v9.6.0 to Android, enabling the creation of small, efficient Android applications with rich graphical user interfaces.
+A framework for building small, efficient Android applications using [LVGL (Light and Versatile Graphics Library)](https://lvgl.io/) v9.6.0.
 
 ## Overview
 
-This project demonstrates how to integrate LVGL (a lightweight embedded GUI library) into an Android application. LVGL renders directly to an Android `SurfaceView` via native C code using JNI, providing a fully customizable UI without relying on Android's native widget system.
+This project transforms LVGL — a lightweight embedded GUI library — into a full Android framework. The framework provides Kotlin-first APIs for building Android apps with custom UI, including activities, input methods (keyboards), launchers, games, and apps with camera integration.
+
+LVGL renders directly to an Android `SurfaceView` via native C code using JNI, providing a fully customizable UI without relying on Android's native widget system.
 
 **Key Features:**
-- LVGL v9.6.0 core library compiled as a shared library
-- Direct framebuffer rendering via `ANativeWindow`
-- Touch input handling through Android's `SurfaceView` touch events
-- Support for LVGL themes, styles, layouts, and widgets
-- Minimal memory footprint compared to traditional Android UI frameworks
+- LVGL v9.6.0 as a Git submodule for easy version updates
+- Modular library (`lvgl-android`) + sample app architecture
+- Kotlin-first API with DSL support planned
+- Material Design 3 theme integration with dark/light mode
+- Dynamic DPI adaptation and screen rotation handling
+- Multiwindow and foldable device support
+- Input Method Service (keyboard) support
+- Launcher/home screen support
+- Game-optimized activity with vsync
+- Camera preview integration
+- R/B pixel swap for correct RGBA rendering
+- Dedicated LVGL render thread at ~60fps
+- Touch input with pointer gestures
+
+## Module Structure
+
+```
+android_lvgl/
+├── lvgl/                       # Git submodule (LVGL v9.6.0 source)
+│   ├── include/lvgl/           # Public headers
+│   └── src/                    # Implementation files
+├── lvgl-android/               # Framework library module
+│   ├── src/main/
+│   │   ├── java/com/lvgl/android/
+│   │   │   ├── engine/         # LvglEngine (singleton rendering engine)
+│   │   │   ├── view/           # LvglSurfaceView
+│   │   │   ├── activity/       # LvglActivity base class
+│   │   │   ├── config/         # DpiManager, DisplayMetricsManager, ConfigurationManager
+│   │   │   ├── theme/          # MaterialTheme, LvglThemeBridge
+│   │   │   ├── window/         # MultiWindowManager
+│   │   │   ├── input/          # LvglInputMethodService
+│   │   │   ├── launcher/       # LvglLauncherActivity
+│   │   │   ├── game/           # LvglGameActivity
+│   │   │   ├── camera/         # LvglCameraPreview
+│   │   │   └── util/           # LvglLog
+│   │   └── cpp/                # Native code (CMake)
+│   └── build.gradle.kts
+├── app/                        # Sample application
+│   ├── src/main/
+│   │   ├── java/com/lvgl/sample/
+│   │   │   └── MainActivity.kt
+│   │   └── res/
+│   └── build.gradle.kts
+├── screenshots/                # Screenshots for documentation
+├── build.gradle.kts            # Root build config
+├── settings.gradle.kts         # Gradle settings (includes :app, :lvgl-android)
+├── ai-context.md               # Known issues and quirks
+├── AGENTS.md                   # Development guide
+├── BUILDING.md                 # Quick start guide
+└── README.md                   # This file
+```
 
 ## Requirements
 
 - Android SDK (API 24+)
 - Android NDK r26b or compatible
 - JDK 17+
-- CMake 3.22.1+
+- CMake 3.22.1+ (with `share/cmake-X.Y` directory)
 - Gradle 8.5+
+
+## Environment Setup
+
+```powershell
+$env:JAVA_HOME = "C:\Users\lgstoian\jdk-17\jdk-17.0.12"
+$env:ANDROID_HOME = "D:\ASDK"
+```
 
 ## Building
 
-1. Set up environment variables:
-   ```powershell
-   $env:JAVA_HOME = "C:\Users\lgstoian\jdk-17\jdk-17.0.12"
-   $env:ANDROID_HOME = "D:\ASDK"
-   ```
+```powershell
+# Set environment
+$env:JAVA_HOME = "C:\Users\lgstoian\jdk-17\jdk-17.0.12"
+$env:ANDROID_HOME = "D:\ASDK"
 
-2. Create `local.properties` in the project root:
-   ```properties
-   sdk.dir=D\:\\ASDK
-   ndk.dir=D\:\\ASDK\\ndk\\android-ndk-r26b
-   ```
-
-3. Build the debug APK:
-   ```powershell
-   .\gradlew.bat assembleDebug
-   ```
-
-4. The APK will be at `app/build/outputs/apk/debug/app-debug.apk`
-
-## Project Structure
-
+# Build
+cd "D:\Code\android lvgl"
+.\gradlew.bat assembleDebug --no-daemon
 ```
-android_lvgl/
-├── app/                        # Android application module
-│   ├── src/main/
-│   │   ├── cpp/
-│   │   │   ├── CMakeLists.txt  # Native build configuration
-│   │   │   ├── lv_conf.h       # LVGL configuration
-│   │   │   └── lvgl_port.cpp   # LVGL port (JNI, rendering, input)
-│   │   ├── java/com/lvgl/sample/
-│   │   │   ├── MainActivity.kt  # Main activity
-│   │   │   └── LvglView.kt     # Custom SurfaceView for LVGL
-│   │   └── res/                # Android resources
-│   └── build.gradle.kts         # App module build config
-├── lvgl/                       # LVGL v9.6.0 source code
-│   ├── include/lvgl/           # Public headers
-│   └── src/                    # Implementation files
-├── screenshots/                # Screenshots for documentation
-├── build.gradle.kts            # Root build config
-├── settings.gradle.kts         # Gradle settings
-└── README.md                   # This file
-```
+
+APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Architecture
+
+### Framework Layers
+
+```
+┌─────────────────────────────────────────┐
+│   Sample Apps (Activity, IME, Launcher)  │
+├─────────────────────────────────────────┤
+│   Kotlin Framework (LvglActivity, etc.)  │
+├─────────────────────────────────────────┤
+│   JNI Bridge (nativeCreate, etc.)       │
+├─────────────────────────────────────────┤
+│   C++ Native (Engine, rendering, input)  │
+├─────────────────────────────────────────┤
+│   LVGL 9.6.0 (core, widgets, themes)    │
+└─────────────────────────────────────────┘
+```
 
 ### Rendering Pipeline
 
 1. LVGL renders widgets into a framebuffer in memory
-2. The flush callback copies the framebuffer to an `ANativeWindow`
+2. The flush callback (C++) copies the framebuffer to an `ANativeWindow`
 3. Pixel format conversion (BGRA → RGBA) is performed during copy
 4. `ANativeWindow_unlockAndPost()` presents the frame
 
 ### Threading Model
 
-- LVGL runs on a dedicated thread (`g_lvglThread`)
-- `lv_timer_handler()` is called every 5ms
-- Touch events are received on the UI thread and passed to LVGL via JNI
-- `ANativeWindow` operations happen on the LVGL thread during the flush callback
+- LVGL `LvglEngine` is a Kotlin singleton managing display lifecycle
+- Native C++ `Engine` struct holds native state (window, display, framebuffers, threads)
+- `nativeCreate`/`nativeDestroy` manage the native engine lifecycle via JNI
+- Dedicated LVGL thread runs `lv_timer_handler()` every 5ms
+- Touch events propagate from Kotlin UI thread to native via JNI
 
-### Key Files
+### Material Theme Integration
 
-| File | Purpose |
-|------|---------|
-| `lvgl_port.cpp` | Main JNI bridge, display/touch initialization, LVGL thread |
-| `LvglView.kt` | Custom `SurfaceView` that manages the native surface lifecycle |
-| `lv_conf.h` | LVGL configuration (color depth, widgets, features) |
-| `CMakeLists.txt` | Native build configuration |
+- `MaterialTheme` provides Material Design 3 color tokens
+- Auto-detects dark/light mode from system configuration
+- `LvglActivity` registers theme change listeners
+- Theme bridge applies changes to LVGL's rendering
 
-## Testing
+## Updating LVGL Version
 
-1. Start an Android emulator:
-   ```powershell
-   emulator -avd test_avd -no-window -no-audio -gpu swiftshader_indirect
-   ```
+LVGL is a Git submodule:
 
-2. Install the APK:
-   ```powershell
-   adb install -r app\build\outputs\apk\debug\app-debug.apk
-   ```
-
-3. Launch the app:
-   ```powershell
-   adb shell am start -n com.lvgl.sample/.MainActivity
-   ```
-
-4. Capture a screenshot:
-   ```powershell
-   adb shell screencap -p /sdcard/screenshot.png
-   adb pull /sdcard/screenshot.png screenshots/
-   ```
-
-## Customizing the UI
-
-Edit the `create_default_ui()` function in `lvgl_port.cpp` to create your own LVGL-based interface. See [LVGL documentation](https://docs.lvgl.io/) for available widgets and APIs.
-
-Example:
-```c
-static void create_default_ui() {
-    lv_obj_t* screen = lv_screen_active();
-
-    lv_obj_t* label = lv_label_create(screen);
-    lv_label_set_text(label, "Hello Android!");
-    lv_obj_center(label);
-}
+```powershell
+cd lvgl
+git fetch --tags
+git checkout v9.7.0  # Change to desired version
+cd ..
+git add lvgl
+git commit -m "Update LVGL to v9.7.0"
 ```
+
+After updating, check for:
+- New config options in `lv_conf.h`
+- New/deprecated APIs in `lvgl/src/**/*.c`
+- New function signatures in `include/lvgl/**/*.h`
+
+## Documentation
+
+- [AGENTS.md](AGENTS.md) — Development guide and troubleshooting (read before coding)
+- [ai-context.md](ai-context.md) — Known issues, quirks, and fixes
+- [BUILDING.md](BUILDING.md) — Quick start guide
+- [ROADMAP.md](ROADMAP.md) — Development roadmap and progress
 
 ## License
 
-LVGL is licensed under the MIT License. See `lvgl/LICENCE.txt` for details.
+- LVGL: MIT License (`lvgl/LICENCE.txt`)
+- Android framework code: [License TBD]
