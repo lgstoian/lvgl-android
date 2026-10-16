@@ -157,5 +157,8 @@ After updating, check for:
 
 ## License
 
-- LVGL: MIT License (`lvgl/LICENCE.txt`)
-- Android framework code: [License TBD]
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for the full text.
+
+### Third-Party Software
+
+This project uses [LVGL](https://lvgl.io) v9.6.0, which is also MIT licensed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for a complete list of attributions.

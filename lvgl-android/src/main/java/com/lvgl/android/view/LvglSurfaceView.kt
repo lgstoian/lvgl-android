@@ -1,4 +1,9 @@
-﻿package com.lvgl.android.view
+﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// SPDX-License-Identifier: MIT
+//
+// This file is part of the LVGL Android Framework.
+// See LICENSE in the project root for full license information.
+package com.lvgl.android.view
 import com.lvgl.android.engine.LvglEngine
 import android.content.Context
 import android.graphics.PixelFormat
@@ -92,6 +97,7 @@ open class LvglSurfaceView @JvmOverloads constructor(
         private const val TAG = "LvglSurfaceView"
     }
 }
+
 
 
 

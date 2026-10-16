@@ -1,0 +1,21 @@
+# Build outputs
+build/
+.gradle/
+.idea/
+*.iml
+local.properties
+.cxx/
+*.apk
+*.aab
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots (keep for documentation but ignore new ones)
+screenshots/*.png
+!screenshots/.gitkeep
+
+# Temporary
+*.tmp
+*.log

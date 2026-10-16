@@ -1,3 +1,8 @@
+﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// SPDX-License-Identifier: MIT
+//
+// This file is part of the LVGL Android Framework.
+// See LICENSE in the project root for full license information.
 package com.lvgl.android.perf
 
 import android.util.Log
@@ -71,3 +76,4 @@ object LvglPerformanceMonitor {
 
     private const val TAG = "LvglPerfMon"
 }
+
