@@ -23,9 +23,12 @@ jobs:
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
+      with:
+        cmdline-tools-version: latest
 
-    - name: Install NDK
+    - name: Install NDK and CMake
       run: |
+        yes | sdkmanager --licenses || true
         sdkmanager "ndk;26.1.10909125"
         sdkmanager "cmake;3.22.1"
 
