@@ -1,6 +1,6 @@
 # LVGL Android Framework — Development Roadmap
 
-> Last updated: 2026-10-16
+> Last updated: 2026-10-31
 > Current Phase: Complete — All 14 phases done
 
 ## Overview
@@ -91,14 +91,17 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 
 ### Phase 13: Testing & CI ✅
 - Unit tests: `DpiManagerTest`, `LvglNavigationTest`, `GestureLogicTest`
-- Instrumented tests: `LvglActivityTest`
+- Guard tests: `HardRuleGuardTest`, `GuardRules`, `GuardCanaryTest`
+- Annotation tests: `MachineCommentParser`, `SourceComments`, `AnnotationValidator`,
+  `MachineCommentValidationTest`
+- Instrumented tests: `LvglActivityTest`, `LvglEngineLifecycleInstrumentedTest`
 - GitHub Actions CI workflow in `.github/workflows/ci.yml`
 - Build verified passing for debug and release
 
 ### Phase 14: Multi-ABI & Performance ✅
 - `LvglPerformanceMonitor` for FPS, frame time tracking
 - CI workflow expanded with release builds
-- Multi-ABI: arm64-v8a primary; x86_64/armeabi-v7a blocked by NDK r26b + CMake 3.22.1
+- Multi-ABI: arm64-v8a + x86_64 both build and package; armeabi-v7a blocked by NDK r26b + CMake 3.22.1
 
 ---
 
@@ -203,7 +206,43 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 
 **Decision**: Stored in ROADMAP.md.
 
+### ADR-011: Machine-Readable Comment Schema
+
+**Status**: Accepted
+
+**Context**: AI agents and tools need structured comments, not prose, to read the
+intent behind non-obvious code.
+
+**Decision**: Source files carry `@tag key=value` annotations (guard-rule,
+invariant, decision, breadcrumb, machine-json, contract, ai-hint, why, do-not,
+trap). `MachineCommentValidationTest` parses and validates every annotation in
+the repo. See `docs/agent-comment-schema.md`.
+
+### ADR-012: Breadcrumb Trail for AI Agents
+
+**Status**: Accepted
+
+**Context**: Non-obvious decisions were scattered across markdown, so an agent
+could not follow the trail without reading every file.
+
+**Decision**: `docs/agent-breadcrumbs.json` is the machine-readable decision
+trail. Each entry has an id, decision, rationale, consequences, files, symbols,
+see-also ADRs, do-not list and an AI hint. Source files link to entries via
+`@breadcrumb BC-NNN`; every entry must be referenced at least once.
+
+### ADR-013: Mutation-Style Canary Tests
+
+**Status**: Accepted
+
+**Context**: A guard test once passed while checking nothing (a broken repo-root
+path made `exists()` false), so green did not mean safe.
+
+**Decision**: Guard detection lives in `GuardRules` and `GuardCanaryTest` feeds
+each detector a broken fixture that must be detected (no false green) and a
+clean fixture that must not be (no false positive). See `BC-014`.
+
 ## Change Log
 
 - **2026-10-16**: Roadmap created. Phases 1-8 marked complete.
 - **2026-10-16**: Phases 9-14 complete. Rendering fixed. Performance monitor, CI, unit tests added.
+- **2026-10-31**: Added ADR-011..013: machine-readable comment schema, breadcrumb trail, and canary tests (BC-014/015).

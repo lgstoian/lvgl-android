@@ -8,7 +8,7 @@ package com.lvgl.android.navigation
 import android.content.Intent
 
 object LvglNavigation {
-    private var currentActivity: android.app.Activity? = null
+    private var currentActivityRef: java.lang.ref.WeakReference<android.app.Activity>? = null
     private val screenStack = mutableListOf<String>()
 
     fun pushScreen(screen: String) {
@@ -26,10 +26,10 @@ object LvglNavigation {
     }
 
     fun setMainActivity(activity: android.app.Activity?) {
-        currentActivity = activity
+        currentActivityRef = activity?.let { java.lang.ref.WeakReference(it) }
     }
 
-    fun getMainActivity(): android.app.Activity? = currentActivity
+    fun getMainActivity(): android.app.Activity? = currentActivityRef?.get()
 
     fun navigateTo(activity: android.app.Activity, target: Class<*>) {
         val intent = Intent(activity, target)
@@ -38,8 +38,8 @@ object LvglNavigation {
     }
 
     fun navigateBack(activity: android.app.Activity) {
-        if (activity is android.app.Activity) {
-            activity.onBackPressed()
+        if (activity is androidx.activity.ComponentActivity) {
+            activity.onBackPressedDispatcher.onBackPressed()
         }
     }
 }

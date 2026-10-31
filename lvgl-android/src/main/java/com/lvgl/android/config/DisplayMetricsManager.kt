@@ -10,7 +10,7 @@ import android.content.res.Configuration
 import android.util.DisplayMetrics
 import android.util.Log
 
-class DisplayMetricsManager(context: Context) {
+class DisplayMetricsManager(private val context: Context) {
 
     var densityDpi: Int = 0
         private set
@@ -59,11 +59,12 @@ class DisplayMetricsManager(context: Context) {
     }
 
     fun onConfigurationChanged(newConfig: Configuration) {
-        val newLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        if (newLandscape != isLandscape) {
-            isLandscape = newLandscape
-            notifyListeners()
-        }
+        /* Refresh the cached metrics and notify listeners: the activity routes
+         * config changes here instead of recreating. applicationContext is only
+         * valid once the activity is attached, so resolve it lazily here. */
+        val ctx = context.applicationContext ?: context
+        update(ctx)
+        notifyListeners()
     }
 
     fun addListener(listener: OnDisplayMetricsChangedListener) {

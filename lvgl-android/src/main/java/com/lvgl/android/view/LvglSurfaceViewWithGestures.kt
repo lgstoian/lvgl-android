@@ -23,9 +23,11 @@ open class LvglSurfaceViewWithGestures @JvmOverloads constructor(
     private var lastGestureResult: com.lvgl.android.input.Gestures? = null
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        lastGestureResult = null
-        val result = inputProcessor.processMotionEvent(event)
-        return result || super.onTouchEvent(event)
+        // The processor both detects gestures AND forwards the raw event to
+        // LVGL, so calling super.onTouchEvent() here would double-send every
+        // touch (widgets saw each press twice).
+        lastGestureResult = inputProcessor.processMotionEvent(event)
+        return true
     }
 
     fun getLastGestureResult(): com.lvgl.android.input.Gestures? = lastGestureResult

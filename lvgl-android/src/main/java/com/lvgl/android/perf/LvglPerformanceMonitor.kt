@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicLong
 object LvglPerformanceMonitor {
 
     private val frameCount = AtomicLong(0)
+    private var windowFrameCount = 0L
     private var lastFpsTime = SystemClock.elapsedRealtime()
     private var lastFps = 0
     private var frameTimeSum = 0L
@@ -46,14 +47,18 @@ object LvglPerformanceMonitor {
         if (frameTimeMs < minFrameTime) minFrameTime = frameTimeMs
         if (frameTimeMs > maxFrameTime) maxFrameTime = frameTimeMs
         frameCount.incrementAndGet()
+        windowFrameCount++
 
         val elapsed = SystemClock.elapsedRealtime() - lastFpsTime
         if (elapsed >= 1000) {
-            val frames = frameCount.get()
+            /* Count only the frames rendered in this window, not the cumulative
+             * total, otherwise the reported FPS grows every second. */
+            val frames = windowFrameCount
             lastFps = (frames * 1000 / elapsed).toInt()
             val avgFrameTime = if (frameTimeCount > 0) frameTimeSum / frameTimeCount else 0
-            Log.i(TAG, "FPS: $lastFps | Avg: ${avgFrameTime}ms | Min: ${minFrameTime}ms | Max: ${maxFrameTime}ms | Total: $frames frames")
+            Log.i(TAG, "FPS: $lastFps | Avg: ${avgFrameTime}ms | Min: ${minFrameTime}ms | Max: ${maxFrameTime}ms | Total: ${frameCount.get()} frames")
             lastFpsTime = SystemClock.elapsedRealtime()
+            windowFrameCount = 0
         }
     }
 
@@ -63,7 +68,7 @@ object LvglPerformanceMonitor {
         "fps" to lastFps,
         "frameCount" to frameCount.get(),
         "avgFrameTimeMs" to if (frameTimeCount > 0) frameTimeSum / frameTimeCount else 0,
-        "minFrameTimeMs" to minFrameTime,
+        "minFrameTimeMs" to if (frameTimeCount > 0) minFrameTime else 0,
         "maxFrameTimeMs" to maxFrameTime
     )
 

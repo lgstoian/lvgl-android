@@ -24,8 +24,9 @@ LVGL renders directly to an Android `SurfaceView` via native C code using JNI, p
 - Game-optimized activity with vsync
 - Camera preview integration
 - R/B pixel swap for correct RGBA rendering
-- Dedicated LVGL render thread at ~60fps
+- Dedicated LVGL render thread (vsync-aware, honours LVGL's requested period)
 - Touch input with pointer gestures
+- Spring-physics animation engine and animated window overlays
 
 ## Module Structure
 
@@ -38,24 +39,30 @@ android_lvgl/
 │   ├── src/main/
 │   │   ├── java/com/lvgl/android/
 │   │   │   ├── engine/         # LvglEngine (singleton rendering engine)
-│   │   │   ├── view/           # LvglSurfaceView
-│   │   │   ├── activity/       # LvglActivity base class
+│   │   │   ├── view/           # LvglSurfaceView, LvglSurfaceViewWithGestures
+│   │   │   ├── activity/       # LvglActivity base class, accessibility ext
 │   │   │   ├── config/         # DpiManager, DisplayMetricsManager, ConfigurationManager
 │   │   │   ├── theme/          # MaterialTheme, LvglThemeBridge
 │   │   │   ├── window/         # MultiWindowManager
-│   │   │   ├── input/          # LvglInputMethodService
+│   │   │   ├── input/          # LvglInputMethodService, LvglInputProcessor, gestures
 │   │   │   ├── launcher/       # LvglLauncherActivity
 │   │   │   ├── game/           # LvglGameActivity
 │   │   │   ├── camera/         # LvglCameraPreview
+│   │   │   ├── navigation/     # LvglNavigation (screen back stack)
+│   │   │   ├── accessibility/  # LvglAccessibilityManager, focus navigation, screen reader
+│   │   │   ├── perf/           # LvglPerformanceMonitor
 │   │   │   └── util/           # LvglLog
-│   │   └── cpp/                # Native code (CMake)
+│   │   └── cpp/                # Native code (CMake): port, demo UI, animation, windows
 │   └── build.gradle.kts
 ├── app/                        # Sample application
 │   ├── src/main/
 │   │   ├── java/com/lvgl/sample/
-│   │   │   └── MainActivity.kt
+│   │   │   ├── *.kt            # Menu + widget/layout/interactive/camera/game/launcher samples
+│   │   │   └── showcase/       # DemoShowcaseActivity (spring-physics demo)
 │   │   └── res/
 │   └── build.gradle.kts
+├── docs/                       # Agent breadcrumb trail + comment schema
+├── tools/                      # Dynamic (emulator) test harness
 ├── screenshots/                # Screenshots for documentation
 ├── build.gradle.kts            # Root build config
 ├── settings.gradle.kts         # Gradle settings (includes :app, :lvgl-android)
@@ -124,7 +131,8 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 - LVGL `LvglEngine` is a Kotlin singleton managing display lifecycle
 - Native C++ `Engine` struct holds native state (window, display, framebuffers, threads)
 - `nativeCreate`/`nativeDestroy` manage the native engine lifecycle via JNI
-- Dedicated LVGL thread runs `lv_timer_handler()` every 5ms
+- Dedicated LVGL thread runs `lv_timer_handler()`, honouring the period LVGL
+  requests (capped at ~16 ms) so animations stay vsync-aware
 - Touch events propagate from Kotlin UI thread to native via JNI
 
 ### Material Theme Integration
@@ -156,6 +164,8 @@ After updating, check for:
 
 - [AGENTS.md](AGENTS.md) — Development guide and troubleshooting (read before coding)
 - [ai-context.md](ai-context.md) — Known issues, quirks, and fixes
+- [docs/agent-comment-schema.md](docs/agent-comment-schema.md) — Machine-readable comment schema
+- [docs/agent-breadcrumbs.json](docs/agent-breadcrumbs.json) — Decision trail for AI agents
 - [BUILDING.md](BUILDING.md) — Quick start guide
 - [ROADMAP.md](ROADMAP.md) — Development roadmap and progress
 

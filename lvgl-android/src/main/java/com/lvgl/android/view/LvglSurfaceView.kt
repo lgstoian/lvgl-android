@@ -4,7 +4,7 @@
 // This file is part of the LVGL Android Framework.
 // See LICENSE in the project root for full license information.
 package com.lvgl.android.view
-import com.lvgl.android.engine.LvglEngine
+
 import android.content.Context
 import android.graphics.PixelFormat
 import android.util.AttributeSet
@@ -12,8 +12,15 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import com.lvgl.android.engine.LvglEngine
 
-
+/**
+ * SurfaceView that hosts the LVGL render surface.
+ *
+ * The LVGL engine is process-wide (see LvglEngine); this view only manages the
+ * *display* bound to its surface. On surface recreation it re-initialises the
+ * display without destroying the engine, so the current screen + theme survive.
+ */
 open class LvglSurfaceView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -26,6 +33,10 @@ open class LvglSurfaceView @JvmOverloads constructor(
     init {
         holder.addCallback(this)
         holder.setFormat(PixelFormat.RGBA_8888)
+        /* Surface sits behind window content so dialogs/permissions render on top.
+         * setZOrderOnTop(true) is intentionally NOT used (it hides in-app
+         * dialogs behind the LVGL surface and contributes to the ANR). */
+        setZOrderMediaOverlay(false)
         setZOrderOnTop(false)
     }
 
@@ -36,26 +47,23 @@ open class LvglSurfaceView @JvmOverloads constructor(
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         Log.d(TAG, "surfaceChanged: ${width}x${height}")
-
-        if (nativeInitialized) {
-            engine.deinitDisplay()
-            nativeInitialized = false
-        }
-
         val dpi = resources.displayMetrics.densityDpi
-        engine.initDisplay(holder.surface, width, height, dpi)
+        /* The native side rebinds the surface to the shared display when the
+         * size is unchanged, and only rebuilds on a genuine size change. */
+        engine.initDisplay(this, holder.surface, width, height, dpi)
         nativeInitialized = true
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         Log.d(TAG, "surfaceDestroyed")
         if (nativeInitialized) {
-            engine.deinitDisplay()
+            engine.deinitDisplay(this)
             nativeInitialized = false
         }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        Log.d(TAG, "onTouchEvent action=${event.actionMasked} (${event.x},${event.y})")
         val action = event.actionMasked
         val pointerIndex = event.actionIndex
         val x = event.getX(pointerIndex)
@@ -82,22 +90,15 @@ open class LvglSurfaceView @JvmOverloads constructor(
     }
 
     fun destroy() {
-        if (nativeInitialized) { engine.deinitDisplay(); nativeInitialized = false }
-        engine.shutdown()
+        if (nativeInitialized) {
+            engine.deinitDisplay(this)
+            nativeInitialized = false
+        }
+        /* The engine itself is process-wide and intentionally not destroyed
+         * here — the display is only unbound, so a later activity can rebind. */
     }
-
-    fun applyTheme(darkMode: Boolean) {
-        engine.applyTheme(darkMode, engineThemePrimary, engineThemeSecondary)
-    }
-
-    private val engineThemePrimary = 0x1976D2
-    private val engineThemeSecondary = 0xDC004E
 
     companion object {
         private const val TAG = "LvglSurfaceView"
     }
 }
-
-
-
-

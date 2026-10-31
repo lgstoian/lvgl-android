@@ -1,0 +1,346 @@
+{
+  "schema": "lvgl-android/breadcrumbs/1",
+  "description": "Decision trail for AI agents. Each entry records a non-obvious decision, its rationale, and what an agent must NOT do. Source files reference these via '// @breadcrumb BC-NNN'. Validate with MachineCommentValidationTest.",
+  "adrs_source": "ROADMAP.md",
+  "entries": [
+    {
+      "id": "BC-001",
+      "title": "Process-wide engine, owner-scoped display",
+      "decision": "LvglEngine is a process-wide singleton; an activity binds/unbinds a display by owner identity instead of tearing the engine down.",
+      "rationale": "Tearing the engine down between activities showed the previous activity's screen and stalled the UI thread (ANR).",
+      "consequences": [
+        "The native engine and its render thread outlive every activity.",
+        "A stale owner's deinitDisplay must be ignored."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt"
+      ],
+      "symbols": ["LvglEngine", "initDisplay", "deinitDisplay", "activeOwner"],
+      "see_also": ["ADR-002", "ADR-008"],
+      "do_not": ["Never call LvglEngine.shutdown() from an activity."],
+      "ai_hint": "When adding lifecycle code, reason about owner identity, not about activity destruction."
+    },
+    {
+      "id": "BC-002",
+      "title": "Surface rebind fast path",
+      "decision": "On a same-size surface, keep the display and only rebind the ANativeWindow; do not tear the display down and rebuild it.",
+      "rationale": "Rebuilding the display on every activity transition both showed the wrong screen and wedged the UI thread (ANR).",
+      "consequences": [
+        "A same-size initDisplay is a pure rebind.",
+        "A size change is the only case that rebuilds the display."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["nativeInitDisplay", "pendingWindow", "pendingWindowSet"],
+      "see_also": ["ADR-002"],
+      "do_not": ["Do not join the render thread from the UI thread during a rebind."],
+      "ai_hint": "The fast path is the default; treat teardown as the exceptional branch."
+    },
+    {
+      "id": "BC-003",
+      "title": "Never scheduleTask() under engine->mutex",
+      "decision": "Copy state under the lock, release it, and only then call scheduleTask().",
+      "rationale": "scheduleTask locks the same non-recursive mutex, so calling it while holding engine->mutex deadlocks the UI thread (ANR).",
+      "consequences": [
+        "nativeSetScreen / nativeApplyTheme take the lock only to read flags.",
+        "A deadlock here presents as 'System UI isn't responding'."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["scheduleTask", "nativeSetScreen", "nativeApplyTheme"],
+      "see_also": ["ADR-004"],
+      "do_not": ["Never call scheduleTask() while holding engine->mutex."],
+      "ai_hint": "Any new JNI entry point must follow the lock-copy-release-schedule pattern."
+    },
+    {
+      "id": "BC-004",
+      "title": "Decorative LVGL objects must clear CLICKABLE/SCROLLABLE",
+      "decision": "Route every decorative object through decorative() so it cannot swallow taps from a clickable ancestor.",
+      "rationale": "A plain lv_obj is clickable by default; inner columns/labels captured presses so the card's LV_EVENT_CLICKED never fired.",
+      "consequences": [
+        "Labels, accent bars and inner columns go through decorative().",
+        "Without it, taps silently do nothing."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp"
+      ],
+      "symbols": ["decorative", "flatten", "make_label", "make_row", "make_column"],
+      "see_also": [],
+      "do_not": ["Do not create a decorative container without clearing LV_OBJ_FLAG_CLICKABLE."],
+      "ai_hint": "If a tap handler never fires, suspect a decorative child stealing the hit test."
+    },
+    {
+      "id": "BC-005",
+      "title": "Containers need explicit flex layout",
+      "decision": "Every container holding more than one child sets an explicit flex layout via make_row/make_column.",
+      "rationale": "A plain lv_obj has no layout, so all children are placed at (0,0) and overlap (card titles/subtitles stacked).",
+      "consequences": [
+        "Multi-child containers must be created through the layout helpers.",
+        "Overlapping text is the symptom of a missing layout."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp"
+      ],
+      "symbols": ["make_row", "make_column", "make_screen"],
+      "see_also": [],
+      "do_not": ["Do not add a second child to a container created with lv_obj_create()."],
+      "ai_hint": "When two labels overlap, the parent has no layout set."
+    },
+    {
+      "id": "BC-006",
+      "title": "LVGL fonts are fixed pixel sizes",
+      "decision": "Pick fonts through ui_font(dp, dpi) and spacing through dpx(dp, dpi); never use lv_font_montserrat_NN directly.",
+      "rationale": "LVGL fonts are fixed pixel sizes, so lv_font_montserrat_14 renders ~5sp text on a 440dpi display.",
+      "consequences": [
+        "Montserrat ships only up to size 48; that is the ladder cap.",
+        "The enabled sizes must match lv_conf.h."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.h"
+      ],
+      "symbols": ["ui_font", "dpx", "ui_dpx", "kFontTable"],
+      "see_also": [],
+      "do_not": ["Do not reference lv_font_montserrat_56/64/72; they do not compile."],
+      "ai_hint": "Text that is unreadably small means a font was chosen in pixels instead of dp."
+    },
+    {
+      "id": "BC-007",
+      "title": "BGRA to RGBA swap in the flush callback",
+      "decision": "Swap R/B channels per pixel in display_flush_cb before copying to the ANativeWindow.",
+      "rationale": "LVGL stores lv_color32_t as {blue,green,red,alpha}; Android RGBA_8888 expects {red,green,blue,alpha}.",
+      "consequences": [
+        "Colors are inverted without the swap.",
+        "nativeCaptureFrame returns 0xRRGGBB ints, not raw memory."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.h"
+      ],
+      "symbols": ["display_flush_cb", "copy_pixels_rb_swap", "nativeCaptureFrame"],
+      "see_also": ["ADR-005"],
+      "do_not": ["Do not change the window format without re-checking the channel order."],
+      "ai_hint": "Red and blue swapping means the byte order assumption changed somewhere."
+    },
+    {
+      "id": "BC-008",
+      "title": "Status text cached per screen id",
+      "decision": "Cache the last status text together with the screen id it belongs to, and re-apply it in rebuild_screen().",
+      "rationale": "onResume re-asserting the screen triggers a rebuild that reset the label to its initial text, so live status was wiped.",
+      "consequences": [
+        "lastStatusScreen scopes the cache so text cannot leak between screens.",
+        "An onResume rebuild restores live status instead of losing it."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["rebuild_screen", "lastStatusText", "lastStatusScreen", "nativeSetStatusText"],
+      "see_also": ["BC-011"],
+      "do_not": ["Do not apply cached status to a different screen id."],
+      "ai_hint": "If status resets after resume, the rebuild is not re-applying the cached text."
+    },
+    {
+      "id": "BC-009",
+      "title": "Navigation bridge requires JNI_OnLoad",
+      "decision": "Store the JavaVM in JNI_OnLoad and cache method IDs in nativeSetNavCallback; drain requests on the LVGL thread.",
+      "rationale": "Removing JNI_OnLoad left g_vm null, so nav_valid() was always false and navigation silently failed.",
+      "consequences": [
+        "Navigation only works if JNI_OnLoad is present.",
+        "Requests are drained by the LVGL thread, never the UI thread."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["JNI_OnLoad", "nav_valid", "drainNavRequests", "nav_to", "nav_back"],
+      "see_also": ["ADR-008"],
+      "do_not": ["Do not call Kotlin from native on a thread that is not attached to the JVM."],
+      "ai_hint": "Silent navigation failure means g_vm or the cached method IDs are missing."
+    },
+    {
+      "id": "BC-010",
+      "title": "LvglActivity subclasses must not setContentView()",
+      "decision": "Activities extending LvglActivity must not call setContentView(); switch content via LvglEngine.setScreen().",
+      "rationale": "setContentView replaces the LVGL SurfaceView and produces the greyed-out 'System UI isn't responding' screen.",
+      "consequences": [
+        "The base class owns the root layout and SurfaceView.",
+        "Use AppCompatActivity when native Android views are needed."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt"
+      ],
+      "symbols": ["LvglActivity", "setContentView", "setLvglScreen"],
+      "see_also": ["BC-001"],
+      "do_not": ["Do not call setContentView() from a LvglActivity subclass."],
+      "ai_hint": "A greyed-out UI after a screen switch is almost always a setContentView regression."
+    },
+    {
+      "id": "BC-011",
+      "title": "Re-assert screen id on resume",
+      "decision": "LvglActivity records its screen id and re-asserts it in onResume when the display shows a different screen, skipping the first resume.",
+      "rationale": "The display is process-wide, so returning to an activity that never re-requested its screen showed the wrong screen.",
+      "consequences": [
+        "firstResume skips the redundant initial request.",
+        "Only a differing screen id triggers a rebuild, avoiding flicker."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt"
+      ],
+      "symbols": ["setLvglScreen", "onResume", "firstResume", "lvglScreenId"],
+      "see_also": ["BC-001", "BC-008"],
+      "do_not": ["Do not rebuild the screen on every resume unconditionally."],
+      "ai_hint": "Wrong screen after back navigation means onResume is not re-asserting the id."
+    },
+    {
+      "id": "BC-012",
+      "title": "DIRECT render mode, full-screen framebuffer",
+      "decision": "Use LV_DISPLAY_RENDER_MODE_DIRECT with two full-screen framebuffers.",
+      "rationale": "Partial rendering had ANativeWindow swapchain issues.",
+      "consequences": [
+        "The flush callback always copies the full display.",
+        "Two buffers avoid tearing between LVGL and the window."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["init_display", "fb1", "fb2", "LV_DISPLAY_RENDER_MODE_DIRECT"],
+      "see_also": ["ADR-003"],
+      "do_not": ["Do not switch to partial rendering without fixing the swapchain path."],
+      "ai_hint": "A black screen usually means buffers were set after the flush callback."
+    },
+    {
+      "id": "BC-013",
+      "title": "LV_THEME_DEFAULT_LIGHT is undefined in LVGL 9.6.0",
+      "decision": "Define LV_THEME_DEFAULT_LIGHT as 0 when the header does not provide it.",
+      "rationale": "LVGL 9.6.0 does not define the light theme constant, so referencing it fails to compile.",
+      "consequences": [
+        "Light mode uses 0; dark mode uses LV_THEME_DEFAULT_DARK.",
+        "The fallback must stay guarded by #ifndef."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h"
+      ],
+      "symbols": ["LV_THEME_DEFAULT_LIGHT"],
+      "see_also": [],
+      "do_not": ["Do not reference LV_THEME_DEFAULT_LIGHT without the #ifndef guard."],
+      "ai_hint": "A missing light-theme symbol means the guard was removed or LVGL changed."
+    },
+    {
+      "id": "BC-014",
+      "title": "Guard tests must fail loudly and prove they detect violations",
+      "decision": "Guard tests locate the repo root by walking up, assert the path exists, and include canary fixtures that must be detected (and clean fixtures that must not be).",
+      "rationale": "A hardcoded relative path once resolved outside the repo, so exists() was false and two of three rules silently no-opped (false green).",
+      "consequences": [
+        "A broken path fails the suite instead of passing it.",
+        "Each detector is proven to catch a real violation and to ignore a clean fixture."
+      ],
+      "files": [
+        "lvgl-android/src/test/kotlin/com/lvgl/android/HardRuleGuardTest.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/GuardCanaryTest.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/GuardRules.kt"
+      ],
+      "symbols": ["GuardRules", "GuardCanaryTest", "HardRuleGuardTest"],
+      "see_also": ["BC-015"],
+      "do_not": ["Do not weaken a detector until its canary test is updated too."],
+      "ai_hint": "If a guard goes green after a regression, its canary is missing or broken."
+    },
+    {
+      "id": "BC-015",
+      "title": "Machine-readable comment schema and breadcrumb trail",
+      "decision": "Source files carry structured @tag annotations that cross-reference this trail; MachineCommentValidationTest parses and validates every annotation in the repo.",
+      "rationale": "AI agents need a machine-readable trail of non-obvious decisions instead of prose scattered across markdown.",
+      "consequences": [
+        "Every annotation must use a known tag and a resolvable reference.",
+        "Orphaned breadcrumbs and dangling references fail the build."
+      ],
+      "files": [
+        "docs/agent-breadcrumbs.json",
+        "docs/agent-comment-schema.md",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/annotations/MachineCommentParser.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/annotations/MachineCommentValidationTest.kt"
+      ],
+      "symbols": ["MachineCommentParser", "MiniJson", "MachineCommentValidationTest"],
+      "see_also": ["ADR-011", "ADR-012"],
+      "do_not": ["Do not add an annotation with an unknown tag or a dangling BC-/ADR- reference."],
+      "ai_hint": "New non-obvious decisions should get a BC entry plus an in-code @breadcrumb."
+    },
+    {
+      "id": "BC-016",
+      "title": "Demo UI is a single source of truth",
+      "decision": "All demo/sample screens are declared in demo_ui.h and implemented in demo_ui.cpp; the port only owns the engine and JNI.",
+      "rationale": "Splitting UI code across the port and demo files duplicated screens and made the widget set drift.",
+      "consequences": [
+        "Screens are added by declaring a builder in demo_ui.h.",
+        "The port calls launch_screen() and nothing else UI-specific."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["launch_screen", "build_menu_screen", "ui_set_nav_hooks"],
+      "see_also": [],
+      "do_not": ["Do not build screens directly in lvgl_port.cpp."],
+      "ai_hint": "A screen change belongs in demo_ui.cpp, not the engine."
+    },
+    {
+      "id": "BC-017",
+      "title": "Public ui_* UI-kit API",
+      "decision": "demo_ui.h declares the public UI-kit API (ui_make_panel, ui_make_column, ui_make_label, ui_decorative, ui_dpx, ui_dpi) and demo_ui.cpp defines it; demo_showcase.cpp consumes it.",
+      "rationale": "The showcase demo is a separate translation unit, so the helpers it uses must have external linkage and match the header exactly.",
+      "consequences": [
+        "The ui_* helpers are non-static in demo_ui.cpp.",
+        "Renaming a helper requires updating demo_ui.h, demo_ui.cpp and every consumer.",
+        "A mismatch surfaces as an ld.lld undefined-symbol error, not a compile error."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_showcase.cpp"
+      ],
+      "symbols": ["ui_make_panel", "ui_make_column", "ui_make_label", "ui_decorative", "ui_dpx", "ui_dpi"],
+      "see_also": ["BC-016"],
+      "do_not": ["Do not declare a ui_* helper in demo_ui.h without defining it in demo_ui.cpp."],
+      "ai_hint": "If the link fails on a ui_* symbol, the header and demo_ui.cpp have drifted."
+    },
+    {
+      "id": "BC-018",
+      "title": "Frame callback lifetime",
+      "decision": "Engine::reset() must not clear the frame callback; the showcase sets it while the screen is built and clears it via ui_reset_showcase() when the screen is left.",
+      "rationale": "The render thread starts after the screen is built and calls Engine::reset(); clearing the callback there left the showcase without its per-frame driver, so windows never animated.",
+      "consequences": [
+        "Engine::reset() clears springs/points/colors but keeps frame_callback_.",
+        "ui_reset_showcase() clears the callback and resets g_show before lv_obj_clean().",
+        "launch_screen() calls ui_reset_showcase() whenever the target is not the showcase."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_anim.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_showcase.cpp"
+      ],
+      "symbols": ["Engine::reset", "ui_reset_showcase", "launch_screen", "set_frame_callback"],
+      "see_also": ["BC-017"],
+      "do_not": ["Do not clear frame_callback_ in Engine::reset()."],
+      "ai_hint": "If a window never animates, check whether the frame callback survived Engine::reset()."
+    },
+    {
+      "id": "BC-019",
+      "title": "Window overlay must ignore the parent layout",
+      "decision": "The window's backdrop and container carry LV_OBJ_FLAG_FLOATING so they ignore the parent's flex layout.",
+      "rationale": "A 2000x2000 backdrop in a flex column consumed the column and pushed the tiles off-screen; LVGL also ignores lv_obj_set_pos() for children of a laid-out parent.",
+      "consequences": [
+        "Both bg_close_ and container_ are FLOATING.",
+        "The container's animated x/y via lv_obj_set_pos() is honoured."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_window.cpp"
+      ],
+      "symbols": ["Window::create", "LV_OBJ_FLAG_FLOATING"],
+      "see_also": ["BC-017"],
+      "do_not": ["Do not add a large overlay as a plain child of a flex parent."],
+      "ai_hint": "If an overlay makes siblings vanish, it is participating in the parent's layout."
+    }
+  ]
+}

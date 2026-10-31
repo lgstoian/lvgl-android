@@ -112,7 +112,8 @@ class GestureRecognizer(
                             val cx = (event.getX(0) + event.getX(1)) * 0.5f
                             val cy = (event.getY(0) + event.getY(1)) * 0.5f
                             hadSecond = false // reset after delivering
-                            return Gestures.Pinch(scale, cx, cy)
+                            pendingGesture = Gestures.Pinch(scale, cx, cy)
+                            return null
                         }
                     }
                 }
@@ -160,19 +161,33 @@ class GestureRecognizer(
             }
             val velocity = distance / (duration / 1000f + 0.001f)
             if (velocity >= config.minSwipeVelocity) {
-                return Gestures.Swipe(
+                pendingGesture = Gestures.Swipe(
                     direction = dir,
                     velocityX = dx / (duration / 1000f + 0.001f),
                     velocityY = dy / (duration / 1000f + 0.001f)
                 )
+                return null
             }
         }
         return null
     }
 
+    /**
+     * Returns the most recent gesture and clears it, so each gesture is only
+     * delivered once. Returns null if there is no pending gesture.
+     */
+    fun consumeLastGesture(): Gestures? {
+        val g = pendingGesture
+        pendingGesture = null
+        return g
+    }
+
     fun reset() {
         isDown = false
         hadSecond = false
+        pendingGesture = null
     }
+
+    private var pendingGesture: Gestures? = null;
 }
 

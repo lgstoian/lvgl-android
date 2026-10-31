@@ -35,8 +35,8 @@ class LvglAccessibilityDelegate(
     private val context: Context,
     private val viewId: String
 ) {
-    fun dispatchFocusGained() {
-        LvglAccessibilityHelper.setContentDescription(viewId, "")
+    fun dispatchFocusGained(description: String) {
+        LvglAccessibilityHelper.setContentDescription(viewId, description)
     }
 
     fun dispatchFocusLost() {

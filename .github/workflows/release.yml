@@ -30,7 +30,13 @@ jobs:
         echo "y" | sdkmanager "ndk;26.1.10909125"
         echo "y" | sdkmanager "cmake;3.22.1"
 
-    - name: Build debug and release
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Run unit + guard tests
+      run: ./gradlew :lvgl-android:testDebugUnitTest :app:testDebugUnitTest --no-daemon --stacktrace
+
+    - name: Build release
       run: ./gradlew assembleRelease --no-daemon --stacktrace
 
     - name: Create Release

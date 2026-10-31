@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// Copyright (c) 2026 LVGL Android Framework Contributors
 // SPDX-License-Identifier: MIT
 //
 // This file is part of the LVGL Android Framework.
@@ -7,12 +7,7 @@ package com.lvgl.sample
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Bundle
 import android.util.Log
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.lvgl.android.activity.LvglActivity
@@ -20,95 +15,77 @@ import com.lvgl.android.camera.LvglCameraPreview
 import com.lvgl.android.navigation.LvglNavigation
 
 /**
- * Demonstrates the LVGL Camera Preview with:
- * - Camera2 API integration
- * - Camera permission handling
- * - Preview start/stop
- * - Multiple camera support
+ * Demonstrates the LVGL Camera Preview with Camera2 API integration.
  *
- * Uses LvglCameraPreview which wraps Camera2 API.
+ * Note (see ai-context.md): LvglActivity subclasses must NOT call setContentView().
+ * Camera status is rendered inside LVGL via the engine's status text API.
  */
 class CameraSampleActivity : LvglActivity() {
 
     private lateinit var preview: LvglCameraPreview
-    private lateinit var statusText: TextView
 
     override fun onCreateLvgl() {
         LvglNavigation.pushScreen("CameraSample")
-
-        val root = FrameLayout(this)
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        val title = TextView(this).apply {
-            text = "Camera Sample"
-            textSize = 24f
-            setPadding(20, 20, 20, 20)
-        }
-
-        statusText = TextView(this).apply {
-            text = "Camera status: Initializing..."
-            textSize = 14f
-            setPadding(20, 10, 20, 10)
-        }
-
-        val info = TextView(this).apply {
-            text = "This activity demonstrates Camera2 API integration.\n" +
-                    "Camera preview would render to an LVGL canvas.\n" +
-                    "Tap to toggle camera preview."
-            textSize = 12f
-            setPadding(20, 10, 20, 10)
-        }
-
-        layout.addView(title)
-        layout.addView(statusText)
-        layout.addView(info)
-        root.addView(layout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-
-        setContentView(root)
+        setLvglScreen(4)
+        com.lvgl.android.engine.LvglEngine.instance.setStatusText(getString(R.string.camera_status_idle))
 
         preview = LvglCameraPreview(this)
         checkCameraPermission()
     }
 
     private fun checkCameraPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
             startCamera()
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
-            statusText.text = "Camera status: Requesting permission..."
+            ActivityCompat.requestPermissions(
+                this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST
+            )
+            com.lvgl.android.engine.LvglEngine.instance.setStatusText(
+                getString(R.string.camera_status_requesting)
+            )
         }
     }
 
     private fun startCamera() {
         try {
             preview.open("0")
-            statusText.text = "Camera status: Opened camera 0"
+            com.lvgl.android.engine.LvglEngine.instance.setStatusText(
+                getString(R.string.camera_status_opened)
+            )
             Log.d(TAG, "Camera opened successfully")
         } catch (e: Exception) {
-            statusText.text = "Camera status: Error - ${e.message}"
+            com.lvgl.android.engine.LvglEngine.instance.setStatusText(
+                getString(R.string.camera_status_error, e.message)
+            )
             Log.e(TAG, "Failed to open camera", e)
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_PERMISSION_REQUEST) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startCamera()
             } else {
-                statusText.text = "Camera status: Permission denied"
+                com.lvgl.android.engine.LvglEngine.instance.setStatusText(
+                    getString(R.string.camera_status_denied)
+                )
             }
         }
     }
 
     override fun onPause() {
         super.onPause()
-        preview.stopPreview()
+        if (::preview.isInitialized) preview.stopPreview()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        preview.close()
+        if (::preview.isInitialized) preview.close()
     }
 
     companion object {
@@ -116,4 +93,3 @@ class CameraSampleActivity : LvglActivity() {
         private const val CAMERA_PERMISSION_REQUEST = 1001
     }
 }
-

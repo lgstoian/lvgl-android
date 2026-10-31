@@ -10,11 +10,13 @@ import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputConnection
 import com.lvgl.android.engine.LvglEngine
-import com.lvgl.android.view.LvglSurfaceView
 
 abstract class LvglInputMethodService : InputMethodService() {
 
-    private var lvglView: LvglSurfaceView? = null
+    /** Set true when the IME runs in its own process and may tear down the
+     *  process-wide engine; otherwise the engine is shared with the app and
+     *  must survive the IME being destroyed. */
+    protected open val ownsProcess: Boolean = false
 
     abstract fun onCreateKeyboardView(): View?
 
@@ -44,7 +46,11 @@ abstract class LvglInputMethodService : InputMethodService() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
-        LvglEngine.instance.shutdown()
+        /* Only tear down the process-wide engine when this IME owns the process;
+         * otherwise the app's activities share it and must keep it alive. */
+        if (ownsProcess) {
+            LvglEngine.instance.shutdown()
+        }
     }
 
     protected fun getActiveInputConnection(): InputConnection? {

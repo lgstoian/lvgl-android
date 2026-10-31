@@ -54,11 +54,18 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build debug
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
+    - name: Build debug and release
+      run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
 
-    - name: Run unit tests
-      run: ./gradlew test --no-daemon
+    - name: Lint
+      run: ./gradlew lintDebug --no-daemon
+
+    - name: Run unit + guard tests
+      # HardRuleGuardTest enforces AGENTS.md hard rules (no setContentView in
+      # LvglActivity subclasses, no feature removals, no hardcoded strings).
+      # GuardCanaryTest proves each detector catches a violation and ignores a
+      # clean fixture; MachineCommentValidationTest validates every annotation.
+      run: ./gradlew :lvgl-android:testDebugUnitTest :app:testDebugUnitTest :lvgl-android:testReleaseUnitTest --no-daemon --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -66,3 +73,37 @@ jobs:
       with:
         name: debug-apk
         path: app/build/outputs/apk/debug/*.apk
+
+  # Dynamic screen walk on an x86_64 emulator (KVM-accelerated on ubuntu).
+  dynamic:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+    - uses: actions/checkout@v4
+      with: { submodules: recursive }
+    - uses: actions/setup-java@v4
+      with: { java-version: '17', distribution: 'temurin' }
+    - name: Setup SDK + NDK
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo modprobe kvm || true
+    - name: Run dynamic tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        arch: x86_64
+        profile: pixel_5
+        script: |
+          adb logcat -c
+          chmod +x gradlew
+          ./gradlew assembleDebug :lvgl-android:connectedDebugAndroidTest --no-daemon
+          adb install -r app/build/outputs/apk/debug/app-debug.apk
+          pwsh ./tools/dynamic-test.ps1

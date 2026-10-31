@@ -37,10 +37,17 @@ target_include_directories(lvgl_android PRIVATE
 target_compile_definitions(lvgl_android PRIVATE
     LV_CONF_INCLUDE_SIMPLE
     LV_KCONFIG_IGNORE
+    LV_ASSERT_CUSTOM_INCLUDE="lv_assert_handler.h"
 )
 
 find_library(log-lib log)
 find_library(android-lib android)
+
+# NDK r26b + CMake 3.22.1 cannot resolve libatomic for x86_64 automatically
+# (see ai-context.md). Link it explicitly for x86_64 only.
+if(ANDROID_ABI STREQUAL "x86_64")
+    target_link_options(lvgl_android PRIVATE -latomic)
+endif()
 
 target_link_libraries(lvgl_android
     ${log-lib}

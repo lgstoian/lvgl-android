@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">LVGL Sample</string>
+
+    <!-- Camera sample status (rendered inside LVGL) -->
+    <string name="camera_status_idle">Camera status: idle</string>
+    <string name="camera_status_requesting">Camera status: requesting permission.</string>
+    <string name="camera_status_opened">Camera status: opened camera 0</string>
+    <string name="camera_status_error">Camera status: error - %1$s</string>
+    <string name="camera_status_denied">Camera status: permission denied</string>
+
+    <!-- Game sample scoreboard (rendered inside LVGL) -->
+    <string name="game_status_initial">Score: 0 | Frames: 0</string>
+    <string name="game_status">Score: %1$d | Frames: %2$d</string>
+
+    <!-- Launcher sample app list (rendered inside LVGL) -->
+    <string name="launcher_status_loading">Loading apps.</string>
+    <string name="launcher_count">Installed apps (%1$d):\n\n</string>
+    <string name="launcher_item">- %1$s\n</string>
+    <string name="launcher_more">\n... and %1$d more</string>
+    <string name="launcher_error">Error loading apps: %1$s</string>
 </resources>

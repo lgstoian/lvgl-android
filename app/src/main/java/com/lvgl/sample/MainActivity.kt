@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// Copyright (c) 2026 LVGL Android Framework Contributors
 // SPDX-License-Identifier: MIT
 //
 // This file is part of the LVGL Android Framework.
@@ -6,52 +6,39 @@
 package com.lvgl.sample
 
 import android.os.Bundle
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import com.lvgl.android.activity.LvglActivity
 import com.lvgl.android.navigation.LvglNavigation
 
-class MainActivity : AppCompatActivity() {
+/**
+ * App entry point. Renders the main menu in LVGL - no native Android views.
+ *
+ * Rules (see ai-context.md):
+ *  - LvglActivity subclasses must NOT call setContentView().
+ *  - Switch LVGL content via the engine, not by replacing the surface.
+ */
+class MainActivity : LvglActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Register the screen-to-activity map for LVGL menu navigation before
+        // the base activity wires up its navigator (which needs the resolver).
+        LvglActivity.screenResolver = { screenId ->
+            when (screenId) {
+                1 -> WidgetShowcaseActivity::class.java
+                2 -> LayoutShowcaseActivity::class.java
+                3 -> InteractiveDemoActivity::class.java
+                4 -> CameraSampleActivity::class.java
+                5 -> GameSampleActivity::class.java
+                6 -> LauncherSampleActivity::class.java
+                7 -> com.lvgl.sample.showcase.DemoShowcaseActivity::class.java
+                else -> null
+            }
+        }
         super.onCreate(savedInstanceState)
-        LvglNavigation.setMainActivity(this)
-        setContentView(createMenuLayout())
     }
 
-    private fun createMenuLayout(): FrameLayout {
-        val root = FrameLayout(this)
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        val title = TextView(this).apply {
-            text = "LVGL Android Framework"
-            textSize = 24f
-            setPadding(40, 40, 40, 20)
-        }
-        layout.addView(title)
-
-        val items = listOf(
-            "Widget Showcase" to WidgetShowcaseActivity::class.java,
-            "Layout Showcase" to LayoutShowcaseActivity::class.java,
-            "Interactive Demo" to InteractiveDemoActivity::class.java
-        )
-
-        items.forEach { (titleText, target) ->
-            val tv = TextView(this).apply {
-                text = titleText
-                textSize = 18f
-                setPadding(40, 30, 40, 30)
-                setOnClickListener {
-                    startActivity(android.content.Intent(this@MainActivity, target))
-                }
-            }
-            layout.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-
-        root.addView(layout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        return root
+    override fun onCreateLvgl() {
+        LvglNavigation.setMainActivity(this)
+        LvglNavigation.pushScreen("MainMenu")
+        setLvglScreen(0)
     }
 }
-

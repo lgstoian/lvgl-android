@@ -40,10 +40,20 @@ extern "C" {
 #define LV_USE_DRAW_SW     1
 #define LV_USE_DRAW_VG_LITE 0
 
+/* A ladder of Montserrat sizes so the UI kit can pick a DPI-appropriate font
+ * (see ui_font() in demo_ui.cpp). Without this, text was 14-20 *pixels*, i.e.
+ * ~5-7sp on a 440dpi screen. */
 #define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_16 1
+#define LV_FONT_MONTSERRAT_18 1
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_24 1
 #define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_MONTSERRAT_36 1
+#define LV_FONT_MONTSERRAT_40 1
+#define LV_FONT_MONTSERRAT_44 1
+#define LV_FONT_MONTSERRAT_48 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
 #define LV_USE_THEME_DEFAULT 1
@@ -92,7 +102,9 @@ extern "C" {
 #define LV_USE_LOG      1
 #if LV_USE_LOG
     #define LV_LOG_LEVEL    LV_LOG_LEVEL_WARN
-    #define LV_LOG_PRINTF   1
+    /* Routed to logcat via lv_log_register_print_cb() in lvgl_port.cpp; stdout
+     * is discarded by Android, so keep printf disabled. */
+    #define LV_LOG_PRINTF   0
 #endif
 
 #define LV_USE_PERF_MONITOR     0

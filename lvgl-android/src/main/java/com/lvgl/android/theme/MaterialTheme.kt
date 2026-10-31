@@ -8,6 +8,7 @@ package com.lvgl.android.theme
 import android.content.Context
 import android.content.res.Configuration
 import android.util.Log
+import java.util.concurrent.CopyOnWriteArrayList
 
 class MaterialTheme private constructor() {
 
@@ -29,7 +30,7 @@ class MaterialTheme private constructor() {
     var backgroundOpacity: Int = 100
         private set
 
-    private val listeners = mutableListOf<OnThemeChangedListener>()
+    private val listeners = CopyOnWriteArrayList<OnThemeChangedListener>()
 
     fun initialize(context: Context) {
         val config = context.resources.configuration

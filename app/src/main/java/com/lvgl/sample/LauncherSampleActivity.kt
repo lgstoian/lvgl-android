@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// Copyright (c) 2026 LVGL Android Framework Contributors
 // SPDX-License-Identifier: MIT
 //
 // This file is part of the LVGL Android Framework.
@@ -7,71 +7,45 @@ package com.lvgl.sample
 
 import android.os.Bundle
 import android.util.Log
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
-import com.lvgl.android.activity.LvglActivity
+import com.lvgl.android.launcher.LvglLauncherActivity
 import com.lvgl.android.navigation.LvglNavigation
 
 /**
- * Demonstrates the LVGL Launcher Activity with:
- * - App list retrieval
- * - Package change callbacks
- * - App launching
+ * Demonstrates the LVGL Launcher Activity with app-list retrieval.
  *
- * Subclasses LvglLauncherActivity which provides:
- * - onAllAppsChanged() callback
- * - onPackageAdded/Removed/Changed() callbacks
- * - getAppList() to retrieve installed apps
- * - launchApp(packageName) to start apps
+ * The installed-app list is rendered inside LVGL via the engine's status text
+ * API (see ai-context.md - LvglActivity subclasses must not setContentView()).
  */
-class LauncherSampleActivity : com.lvgl.android.launcher.LvglLauncherActivity() {
-
-    private lateinit var appListText: TextView
+class LauncherSampleActivity : LvglLauncherActivity() {
 
     override fun onCreateLvgl() {
         LvglNavigation.pushScreen("LauncherSample")
-
-        val root = FrameLayout(this)
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        val title = TextView(this).apply {
-            text = "Launcher Sample"
-            textSize = 24f
-            setPadding(20, 20, 20, 20)
-        }
-
-        appListText = TextView(this).apply {
-            text = "Loading apps..."
-            textSize = 14f
-            setPadding(20, 10, 20, 10)
-        }
-
-        layout.addView(title)
-        layout.addView(appListText)
-        root.addView(layout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-
-        setContentView(root)
-
+        setLvglScreen(6)
+        com.lvgl.android.engine.LvglEngine.instance.setStatusText(getString(R.string.launcher_status_loading))
         loadAppList()
     }
 
     private fun loadAppList() {
-        try {
-            val apps = getAppList()
-            val sb = StringBuilder()
-            sb.append("Installed apps (${apps.size}):\n\n")
-            apps.take(20).forEach { app ->
-                sb.append("• ${app.loadLabel(packageManager)}\n")
+        /* Querying packages + loading labels for up to 20 apps is slow; do it off
+         * the main thread so the UI never janks. */
+        Thread {
+            try {
+                val apps = getAppList()
+                val sb = StringBuilder()
+                sb.append(getString(R.string.launcher_count, apps.size))
+                apps.take(20).forEach { app ->
+                    sb.append(getString(R.string.launcher_item, app.loadLabel(packageManager)))
+                }
+                if (apps.size > 20) {
+                    sb.append(getString(R.string.launcher_more, apps.size - 20))
+                }
+                com.lvgl.android.engine.LvglEngine.instance.setStatusText(sb.toString())
+            } catch (e: Exception) {
+                com.lvgl.android.engine.LvglEngine.instance.setStatusText(
+                    getString(R.string.launcher_error, e.message)
+                )
             }
-            if (apps.size > 20) {
-                sb.append("\n... and ${apps.size - 20} more")
-            }
-            appListText.text = sb.toString()
-        } catch (e: Exception) {
-            appListText.text = "Error loading apps: ${e.message}"
-        }
+        }.start()
     }
 
     override fun onAllAppsChanged() {
@@ -95,4 +69,3 @@ class LauncherSampleActivity : com.lvgl.android.launcher.LvglLauncherActivity() 
         private const val TAG = "LauncherSampleActivity"
     }
 }
-

@@ -4,10 +4,10 @@
 
 **Before troubleshooting any build issues, read [ai-context.md](ai-context.md)** which documents all known quirks, oddities, and their resolutions discovered during development. Key issues include:
 
-- Emulator binary: `D:\ASDK\emulator\emulator.exe` (NOT `D:\ASDK\platform-tools\arrom`)
+- Emulator binary: `D:\ASDK\emulator\emulator.exe` (NOT `D:\ASDK\platform-tools\emulator.exe`)
 - ADB unauthorized after key deletion: use `-wipe-data` flag
 - CMake `share/cmake-X.Y` directory missing from GitHub releases
-- NDK r26b + CMake 3.22.1 x86_64 incompatibility (only arm64-v8a)
+- Demo UI lives in `demo_ui.h/.cpp` (single source of truth); `lvgl_port.cpp` owns the engine + JNI only
 - Emulator slow boot: wait 3+ minutes for `sys.boot_completed=1`
 - LVGL 9.x header structure (`include/lvgl/lvgl.h`), color format (BGRA→RGBA swap), user data APIs
 - Kotlin/JNI naming conflicts (`immersiveMode` not `isImmersive`)
@@ -73,14 +73,59 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 ## Key Architecture Decisions
 
 1. **Library + App modules**: `lvgl-android` is reusable library, `app` is sample
-2. **Singleton Engine**: `LvglEngine.instance` manages display lifecycle
+2. **Process-wide engine, owner-scoped display**: `LvglEngine.instance` is a process-wide singleton. Activities bind/unbind a *display* (`initDisplay(owner, …)` / `deinitDisplay(owner)`) but never tear the engine down; `deinitDisplay` from a stale owner is ignored.
 3. **DIRECT render mode**: Full-screen framebuffer (not partial) for swapchain compatibility
-4. **Dedicated LVGL thread**: Runs `lv_timer_handler()` every 5ms with condition variable
+4. **Dedicated LVGL thread + task queue**: `lv_timer_handler()` runs on the render thread; the UI thread only enqueues tasks. Never call `scheduleTask()` while holding `engine->mutex` (non-recursive → deadlock/ANR).
 5. **R/B pixel swap**: BGRA to RGBA during framebuffer copy in flush callback
 6. **Core-only compilation**: CMakeLists.txt compiles only core LVGL modules, no drivers/demos
 7. **Git submodule**: LVGL source is submodule, enabling easy version updates
 8. **Material 3 theme**: Dynamic colors, dark/light mode from system configuration
-9. **Multi-ABI**: arm64-v8a (x86_64 blocked by NDK r26b/x86_64 incompatibility)
+9. **Multi-ABI**: arm64-v8a + x86_64 (x86_64 links `-latomic` explicitly in CMakeLists.txt)
+10. **Surface rebind, not rebuild**: every activity transition delivers a new surface; a same-size surface is rebound to the shared display (fast path) instead of rebuilding it
+11. **Screen ownership**: `LvglActivity.setLvglScreen(id)` records the activity's screen and re-asserts it in `onResume`; live status text is cached per screen and re-applied after a rebuild
+12. **UI kit**: all screens are declared in `demo_ui.h` and implemented in `demo_ui.cpp` (single source of truth)
+
+## UI Development Rules (LVGL)
+
+These are **review rules** (not yet machine-guarded); the machine-checkable rules
+are listed under "Guard Test Protection" below. Each rule is backed by a
+`@breadcrumb` in `docs/agent-breadcrumbs.json`.
+
+- Use `dpx(dp, dpi)` and `ui_font(dp, dpi)` for all spacing and fonts — never raw pixel
+  values or `lv_font_montserrat_NN` directly (LVGL fonts are fixed pixel sizes). [BC-006]
+- Montserrat only ships up to **48 px**; the enabled ladder in `lv_conf.h` caps there.
+- Every container with more than one child must set an explicit layout (flex), or its
+  children will all be placed at (0, 0) and overlap. [BC-005]
+- Every decorative object (label, accent bar, inner column) must be made
+  input-transparent: a plain `lv_obj` is **clickable by default** and will steal taps
+  from a clickable ancestor. [BC-004]
+- Large overlays (e.g. the animated window) must set `LV_OBJ_FLAG_FLOATING` so they
+  ignore the parent's flex layout and honour `lv_obj_set_pos()`. [BC-019]
+- Never call `scheduleTask()` while holding `engine->mutex` — it is non-recursive and
+  will deadlock the UI thread (ANR). [BC-003]
+- User-visible strings must live in `strings.xml`, not in activity sources.
+
+## AI Agent Breadcrumbs & Machine-Readable Comments
+
+- `docs/agent-breadcrumbs.json` is the machine-readable decision trail. Each entry
+  (`BC-NNN`) records a non-obvious decision, its rationale, and a `do_not` list.
+- Source files link to it with `// @breadcrumb BC-NNN` (or `/* @breadcrumb BC-NNN */`).
+- Use the schema in `docs/agent-comment-schema.md`: `@tag key=value`, with tags
+  `guard-rule`, `invariant`, `decision`, `breadcrumb`, `machine-json`, `contract`,
+  `ai-hint`, `why`, `do-not`, `trap`.
+- `MachineCommentValidationTest` fails the build on an unknown tag, a dangling
+  `BC-`/`ADR-` reference, invalid `@machine-json`, or an orphaned breadcrumb.
+- New non-obvious decisions should get a `BC` entry in the JSON **and** an in-code
+  `@breadcrumb`. See `BC-015`.
+
+## Guard Test Protection (no false green, no false positive)
+
+- Detection logic lives in `GuardRules` (`lvgl-android/src/test/.../guards/`).
+- `GuardCanaryTest` feeds each detector a broken fixture that **must** be detected
+  (false-green protection) and a clean fixture that **must not** be (false-positive
+  protection). If you change a detector, update its canary too.
+- Guard tests locate the repo root by walking up and assert the path exists, so a
+  broken path fails loudly instead of silently passing. See `BC-014`.
 
 ## Hard Rules (enforced from user requirements)
 
@@ -107,7 +152,7 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 | Black screen | Check `lv_display_set_buffers()` called before `lv_display_set_flush_cb()` |
 | Touch not working | Verify `nativeTouchEvent` receives correct action codes (0=down, 1=up) |
 | Build downloads fail | Use `curl.exe -L -o` instead of `Invoke-WebRequest` for large files |
-| Emulator won't start | Use binary at `D:\ASDK\emulator\emulator.exe` not `platform-tools\arrom` |
+| Emulator won't start | Use binary at `D:\ASDK\emulator\emulator.exe` not `platform-tools\emulator.exe` |
 | ADB unauthorized | Wipe emulator with `-wipe-data`, then restart ADB server |
 | Slow emulator boot | Wait 3+ minutes, check `sys.boot_completed=1` |
 

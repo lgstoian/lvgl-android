@@ -40,15 +40,23 @@ abstract class LvglGameActivity : LvglActivity() {
                 or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
                 or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             )
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
         }
     }
 
     private fun setupFrameRate() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             val display = windowManager.defaultDisplay
-            val supportedModes = display.supportedModes
-            val bestMode = supportedModes.maxByOrNull { it.refreshRate }
-            if (bestMode != null) {
+            val current = display.mode
+            /* Pick the highest refresh rate among modes that keep the current
+             * resolution; switching resolution would force a surface rebuild. */
+            val bestMode = display.supportedModes
+                .filter { it.physicalWidth == current.physicalWidth &&
+                          it.physicalHeight == current.physicalHeight }
+                .maxByOrNull { it.refreshRate }
+            if (bestMode != null && bestMode.modeId != current.modeId) {
                 val layoutParams = window.attributes
                 layoutParams.preferredDisplayModeId = bestMode.modeId
                 window.attributes = layoutParams
