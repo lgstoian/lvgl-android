@@ -28,7 +28,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
-        <activity android:name=".MainActivity" android:exported="true" />
+        <!-- Launcher entry point: without the MAIN/LAUNCHER intent filter the
+             app has no icon in the launcher and no "open" action in settings. -->
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity android:name=".WidgetShowcaseActivity" android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
         <activity android:name=".LayoutShowcaseActivity" android:exported="true"

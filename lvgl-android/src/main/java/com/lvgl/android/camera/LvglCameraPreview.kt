@@ -5,12 +5,16 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.android.camera
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.media.ImageReader
 import android.util.Log
 import android.util.Size
 import android.view.Surface
+import androidx.annotation.RequiresPermission
+import androidx.core.content.ContextCompat
 
 /**
  * Camera2 preview helper.
@@ -42,7 +46,13 @@ class LvglCameraPreview(private val context: Context) {
      * @param cameraId the Camera2 id to open; defaults to the first camera (`"0"`).
      * @throws SecurityException when the CAMERA permission has not been granted.
      */
+    @RequiresPermission(Manifest.permission.CAMERA)
     fun open(cameraId: String = "0") {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            throw SecurityException("CAMERA permission is required to open the camera")
+        }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             manager.openCamera(cameraId, object : android.hardware.camera2.CameraDevice.StateCallback() {
                 override fun onOpened(camera: android.hardware.camera2.CameraDevice) {

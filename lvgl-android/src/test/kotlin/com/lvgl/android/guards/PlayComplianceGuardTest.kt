@@ -85,6 +85,19 @@ class PlayComplianceGuardTest {
     }
 
     @Test
+    fun mainActivityIsLaunchable() {
+        val block = Regex(
+            """<activity\b[^>]*\bMainActivity\b[^>]*>.*?</activity>""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(manifest.readText())?.value ?: ""
+        assertTrue(
+            "MainActivity must declare MAIN/LAUNCHER or the app has no launcher icon",
+            block.contains("android.intent.action.MAIN") &&
+                block.contains("android.intent.category.LAUNCHER"),
+        )
+    }
+
+    @Test
     fun backupAndLocaleResourcesExist() {
         listOf("backup_rules.xml", "data_extraction_rules.xml", "locales_config.xml").forEach { name ->
             assertTrue("$name must exist", File(repoRoot, "app/src/main/res/xml/$name").isFile)

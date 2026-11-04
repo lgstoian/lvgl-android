@@ -49,6 +49,11 @@ class CameraSampleActivity : LvglActivity() {
     }
 
     private fun startCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         try {
             preview.open("0")
             com.lvgl.android.engine.LvglEngine.instance.setStatusText(
