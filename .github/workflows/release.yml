@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Required to create a release and upload assets. The default token is
+    # read-only in some repository configurations.
+    permissions:
+      contents: write
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
@@ -63,11 +67,19 @@ jobs:
         sha256sum * > SHA256SUMS.txt
         cat SHA256SUMS.txt
 
+    - name: Extract release notes
+      run: |
+        mkdir -p release-artifacts
+        # The 1.0.0 section of the changelog, without the heading.
+        awk '/^## \[1\.0\.0\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md \
+          | sed 's/^### //' > release-artifacts/RELEASE_NOTES.md
+        head -20 release-artifacts/RELEASE_NOTES.md
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: release-artifacts/*
-        generate_release_notes: true
+        body_path: release-artifacts/RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
