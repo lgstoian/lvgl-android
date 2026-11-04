@@ -116,5 +116,4 @@ jobs:
           adb logcat -c
           chmod +x gradlew
           ./gradlew assembleDebug :lvgl-android:connectedDebugAndroidTest --no-daemon
-          adb install -r app/build/outputs/apk/debug/app-debug.apk
           pwsh ./tools/dynamic-test.ps1
