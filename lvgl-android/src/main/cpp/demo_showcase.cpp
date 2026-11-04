@@ -46,6 +46,13 @@ namespace lvgl_android {
 
 #define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, "LVGLShow", __VA_ARGS__)
 
+/* Convert a palette color back to the 0xRRGGBB form Window::Config expects. */
+static uint32_t rgb_hex(lv_color_t c) {
+    return (static_cast<uint32_t>(c.red)   << 16) |
+           (static_cast<uint32_t>(c.green) << 8)  |
+           (static_cast<uint32_t>(c.blue));
+}
+
 /* -------------------------------------------------------------------------- */
 /* State                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -104,16 +111,56 @@ static void add_stat_row(lv_obj_t* parent, const char* name, const char* value, 
 
     auto* nm = lv_label_create(row);
     lv_label_set_text(nm, name);
-    lv_obj_set_style_text_color(nm, lv_color_hex(0xC0C8D8), 0);
-    lv_obj_set_style_text_font(nm, ui_font(15, sd), 0);
+    lv_obj_set_style_text_color(nm, ui_palette().dim, 0);
+    lv_obj_set_style_text_font(nm, ui_font(ui_tokens().f_body, sd), 0);
     ui_decorative(nm);
 
     auto* val = lv_label_create(row);
     lv_label_set_text(val, value);
-    lv_obj_set_style_text_color(val, lv_color_hex(0xE0E5EC), 0);
-    lv_obj_set_style_text_font(val, ui_font(17, sd), 0);
+    lv_obj_set_style_text_color(val, ui_palette().text, 0);
+    lv_obj_set_style_text_font(val, ui_font(ui_tokens().f_body, sd), 0);
     lv_obj_set_flex_grow(val, 1);
     lv_obj_set_style_text_align(val, LV_TEXT_ALIGN_RIGHT, 0);
+    ui_decorative(val);
+}
+
+/* A labelled progress bar row, used to fill the window under the gauges. */
+static void add_bar_row(lv_obj_t* parent, const char* name, int percent,
+                        uint32_t color) {
+    const int sd = ui_dpi();
+    auto* row = lv_obj_create(parent);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_layout(row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_set_style_pad_column(row, ui_dpx(12, sd), 0);
+    ui_decorative(row);
+
+    auto* nm = lv_label_create(row);
+    lv_label_set_text(nm, name);
+    lv_obj_set_style_text_color(nm, ui_palette().dim, 0);
+    lv_obj_set_style_text_font(nm, ui_font(ui_tokens().f_body, sd), 0);
+    lv_obj_set_width(nm, ui_dpx(70, sd));
+    ui_decorative(nm);
+
+    auto* bar = lv_bar_create(row);
+    lv_obj_set_flex_grow(bar, 1);
+    lv_obj_set_height(bar, ui_dpx(10, sd));
+    lv_obj_set_style_radius(bar, ui_dpx(5, sd), LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, ui_dpx(5, sd), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar, ui_palette().divider, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(color), LV_PART_INDICATOR);
+    lv_bar_set_value(bar, percent, LV_ANIM_OFF);
+
+    auto* val = lv_label_create(row);
+    lv_label_set_text_fmt(val, "%d%%", percent);
+    lv_obj_set_style_text_color(val, ui_palette().text, 0);
+    lv_obj_set_style_text_font(val, ui_font(ui_tokens().f_body, sd), 0);
     ui_decorative(val);
 }
 
@@ -123,8 +170,8 @@ static void build_system_content(Window& win) {
 
     auto* hdr = lv_label_create(c);
     lv_label_set_text(hdr, "Live System Stats");
-    lv_obj_set_style_text_color(hdr, lv_color_hex(0xE0E5EC), 0);
-    lv_obj_set_style_text_font(hdr, ui_font(22, sd), 0);
+    lv_obj_set_style_text_color(hdr, ui_palette().text, 0);
+    lv_obj_set_style_text_font(hdr, ui_font(ui_tokens().f_title, sd), 0);
     ui_decorative(hdr);
 
     /* Two animated arc gauges side by side. */
@@ -142,20 +189,28 @@ static void build_system_content(Window& win) {
 
     auto make_gauge = [&](lv_color_t accent, const char* name, lv_obj_t** out_arc) {
         auto* col = lv_obj_create(row);
+        /* Equal halves of the row, no theme padding: the arcs are large and any
+         * extra width makes the two columns overlap. */
+        lv_obj_set_flex_grow(col, 1);
         lv_obj_set_layout(col, LV_LAYOUT_FLEX);
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(col, 0, 0);
+        lv_obj_set_style_pad_all(col, 0, 0);
+        lv_obj_set_style_pad_row(col, ui_dpx(8, sd), 0);
+        /* The arc's stroke is centred on its radius, so it extends slightly past
+         * the widget bounds; never clip it. */
+        lv_obj_add_flag(col, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
         ui_decorative(col);
 
         auto* arc = lv_arc_create(col);
-        lv_obj_set_size(arc, ui_dpx(150, sd), ui_dpx(150, sd));
+        lv_obj_set_size(arc, ui_dpx(132, sd), ui_dpx(132, sd));
         lv_arc_set_bg_angles(arc, 0, 360);
         lv_arc_set_rotation(arc, 270);
         lv_arc_set_range(arc, 0, 100);
-        lv_obj_set_style_arc_color(arc, lv_color_hex(0x2A3346), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(arc, ui_palette().divider, LV_PART_MAIN);
         lv_obj_set_style_arc_width(arc, ui_dpx(12, sd), LV_PART_MAIN);
         lv_obj_set_style_arc_color(arc, accent, LV_PART_INDICATOR);
         lv_obj_set_style_arc_width(arc, ui_dpx(12, sd), LV_PART_INDICATOR);
@@ -164,8 +219,8 @@ static void build_system_content(Window& win) {
 
         auto* lbl = lv_label_create(col);
         lv_label_set_text(lbl, name);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(0xC0C8D8), 0);
-        lv_obj_set_style_text_font(lbl, ui_font(15, sd), 0);
+        lv_obj_set_style_text_color(lbl, ui_palette().dim, 0);
+        lv_obj_set_style_text_font(lbl, ui_font(ui_tokens().f_body, sd), 0);
         ui_decorative(lbl);
     };
 
@@ -174,6 +229,12 @@ static void build_system_content(Window& win) {
 
     add_stat_row(c, "Uptime", "42 min", 0x4FC3F7);
     add_stat_row(c, "Threads", "128", 0x81C784);
+    add_stat_row(c, "Load", "37 %", 0xFFD54F);
+    add_stat_row(c, "FPS", "60", 0xAB47BC);
+    add_stat_row(c, "Temperature", "34 C", 0xFF7043);
+    add_stat_row(c, "Processes", "96", 0x26A69A);
+    add_bar_row(c, "MEM", 62, 0x4FC3F7);
+    add_bar_row(c, "CPU", 41, 0x81C784);
 }
 
 static void build_sensors_content(Window& win) {
@@ -181,8 +242,8 @@ static void build_sensors_content(Window& win) {
     lv_obj_t* c = win.content();
     auto* hdr = lv_label_create(c);
     lv_label_set_text(hdr, "Sensor Dashboard");
-    lv_obj_set_style_text_color(hdr, lv_color_hex(0xE0E5EC), 0);
-    lv_obj_set_style_text_font(hdr, ui_font(22, sd), 0);
+    lv_obj_set_style_text_color(hdr, ui_palette().text, 0);
+    lv_obj_set_style_text_font(hdr, ui_font(ui_tokens().f_title, sd), 0);
     ui_decorative(hdr);
 
     const char* names[] = {"Temperature", "Humidity", "Pressure", "Light"};
@@ -193,28 +254,29 @@ static void build_sensors_content(Window& win) {
         lv_obj_set_height(row, LV_SIZE_CONTENT);
         lv_obj_set_layout(row, LV_LAYOUT_FLEX);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(row, 0, 0);
         lv_obj_set_style_pad_all(row, 0, 0);
-        lv_obj_set_style_pad_row(row, ui_dpx(12, sd), 0);
+        lv_obj_set_style_pad_column(row, ui_dpx(12, sd), 0);
         ui_decorative(row);
 
+        /* Grow to fill the row so the name never sits on top of the bar. */
         auto* bar = lv_bar_create(row);
-        lv_obj_set_width(bar, ui_dpx(260, sd));
+        lv_obj_set_flex_grow(bar, 1);
         lv_obj_set_height(bar, ui_dpx(16, sd));
         lv_obj_set_style_radius(bar, ui_dpx(8, sd), LV_PART_MAIN);
         lv_obj_set_style_radius(bar, ui_dpx(8, sd), LV_PART_INDICATOR);
-        lv_obj_set_style_bg_color(bar, lv_color_hex(0x2A3346), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(bar, ui_palette().divider, LV_PART_MAIN);
         lv_obj_set_style_bg_color(bar, lv_color_hex(colors[i]), LV_PART_INDICATOR);
         lv_bar_set_range(bar, 0, 100);
         lv_bar_set_value(bar, 40 + i * 12, LV_ANIM_OFF);
 
         auto* nm = lv_label_create(row);
         lv_label_set_text(nm, names[i]);
-        lv_obj_set_style_text_color(nm, lv_color_hex(0xC0C8D8), 0);
-        lv_obj_set_style_text_font(nm, ui_font(16, sd), 0);
+        lv_obj_set_style_text_color(nm, ui_palette().dim, 0);
+        lv_obj_set_style_text_font(nm, ui_font(ui_tokens().f_body, sd), 0);
         ui_decorative(nm);
     }
 }
@@ -224,8 +286,8 @@ static void build_controls_content(Window& win) {
     lv_obj_t* c = win.content();
     auto* hdr = lv_label_create(c);
     lv_label_set_text(hdr, "Quick Controls");
-    lv_obj_set_style_text_color(hdr, lv_color_hex(0xE0E5EC), 0);
-    lv_obj_set_style_text_font(hdr, ui_font(22, sd), 0);
+    lv_obj_set_style_text_color(hdr, ui_palette().text, 0);
+    lv_obj_set_style_text_font(hdr, ui_font(ui_tokens().f_title, sd), 0);
     ui_decorative(hdr);
 
     const char* labels[] = {"Wi-Fi", "Bluetooth", "Location", "Notifications"};
@@ -245,12 +307,12 @@ static void build_controls_content(Window& win) {
 
         auto* nm = lv_label_create(row);
         lv_label_set_text(nm, labels[i]);
-        lv_obj_set_style_text_color(nm, lv_color_hex(0xC0C8D8), 0);
-        lv_obj_set_style_text_font(nm, ui_font(17, sd), 0);
+        lv_obj_set_style_text_color(nm, ui_palette().dim, 0);
+        lv_obj_set_style_text_font(nm, ui_font(ui_tokens().f_body, sd), 0);
         ui_decorative(nm);
 
         auto* sw = lv_switch_create(row);
-        lv_obj_set_style_bg_color(sw, lv_color_hex(0x4FC3F7),
+        lv_obj_set_style_bg_color(sw, ui_palette().primary,
                                   LV_PART_INDICATOR | LV_STATE_CHECKED);
     }
 }
@@ -262,8 +324,8 @@ static void build_audio_content(Window& win) {
     lv_obj_set_width(lbl, LV_PCT(100));
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(lbl, "Audio visualiser");
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0x4FC3F7), 0);
-    lv_obj_set_style_text_font(lbl, ui_font(22, sd), 0);
+    lv_obj_set_style_text_color(lbl, ui_palette().primary, 0);
+    lv_obj_set_style_text_font(lbl, ui_font(ui_tokens().f_title, sd), 0);
     ui_decorative(lbl);
 }
 
@@ -317,6 +379,22 @@ static void showcase_tick(float dt) {
 /* Tile                                                                       */
 /* -------------------------------------------------------------------------- */
 
+static void on_tile_event(lv_event_t* e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    auto* tile = static_cast<Tile*>(lv_event_get_user_data(e));
+    if (!tile) return;
+    if (!tile->window) {
+        auto w = std::make_unique<Window>();
+        w->create(g_show.screen, tile->win_cfg);
+        if (tile->content_fn) tile->content_fn(*w);
+        tile->window = std::move(w);
+    }
+    if (tile->window->state() == Window::Closed ||
+        tile->window->state() == Window::Closing) {
+        tile->window->open();
+    }
+}
+
 static void make_tile(lv_obj_t* parent, const char* symbol, const char* name,
                       uint32_t accent, const Window::Config& win_cfg,
                       void (*content_fn)(Window&)) {
@@ -329,25 +407,11 @@ static void make_tile(lv_obj_t* parent, const char* symbol, const char* name,
     lv_obj_set_width(tp->container, LV_PCT(48));
     lv_obj_clear_flag(tp->container, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_set_style_bg_color(tp->container, lv_color_hex(0x1B2233), 0);
+    lv_obj_set_style_bg_color(tp->container, ui_palette().card, 0);
     lv_obj_set_style_radius(tp->container, ui_dpx(18, ui_dpi()), 0);
 
-    lv_obj_add_event_cb(tp->container,
-        [](lv_event_t* e) {
-            auto* tile = static_cast<Tile*>(lv_event_get_user_data(e));
-            if (!tile) return;
-            if (!tile->window) {
-                auto w = std::make_unique<Window>();
-                w->create(g_show.screen, tile->win_cfg);
-                if (tile->content_fn) tile->content_fn(*w);
-                tile->window = std::move(w);
-            }
-            if (tile->window->state() == Window::Closed ||
-                tile->window->state() == Window::Closing) {
-                tile->window->open();
-            }
-        },
-        LV_EVENT_CLICKED, tp);
+    lv_obj_add_event_cb(tp->container, on_tile_event, LV_EVENT_PRESSED, tp);
+    lv_obj_add_event_cb(tp->container, on_tile_event, LV_EVENT_CLICKED, tp);
 
     /* Accent + labels using working helpers. */
     lv_obj_set_layout(tp->container, LV_LAYOUT_FLEX);
@@ -365,10 +429,13 @@ static void make_tile(lv_obj_t* parent, const char* symbol, const char* name,
     lv_obj_set_style_border_width(accent_bar, 0, 0);
     ui_decorative(accent_bar);
 
-    lv_obj_t* col = ui_make_column(tp->container, 4);
+    lv_obj_t* col = ui_make_column(tp->container, UI_SPACE_XS);
     lv_obj_set_flex_grow(col, 1);
-    tp->icon = ui_make_label(col, symbol, 18, lv_color_hex(accent));
-    ui_make_label(col, name, 13, lv_color_hex(0x8892A6));
+    /* Centre the icon + name in the tile so the wide card reads as balanced. */
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    tp->icon = ui_make_label(col, symbol, ui_tokens().f_subtitle, lv_color_hex(accent));
+    ui_make_label(col, name, ui_tokens().f_body, ui_palette().dim);
 
     /* Store window config; window created on tap (avoids z-order blocking). */
     tp->win_cfg = win_cfg;
@@ -385,7 +452,6 @@ void build_showcase_screen_impl(int /*dpi*/) {
 
     /* Inline the screen setup (replicates make_screen + make_header + make_body
      * from demo_ui.cpp, which are static and not linkable here). */
-    const auto& theme = ui_current_theme();
     const int SD = ui_dpi();
     lv_obj_t* screen = lv_screen_active();
     lv_obj_clean(screen);
@@ -396,25 +462,14 @@ void build_showcase_screen_impl(int /*dpi*/) {
     lv_obj_set_layout(screen, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(screen, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(screen, 0, 0);
-    lv_obj_set_style_bg_color(screen, theme.dark_mode ? lv_color_hex(0x0B0E16)
-                                                      : lv_color_hex(0xF2F4F8), 0);
+    lv_obj_set_style_bg_color(screen, ui_palette().bg, 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
-    /* ---- Header ---------------------------------------------------------- */
-    auto* header = lv_obj_create(screen);
-    lv_obj_set_width(header, LV_PCT(100));
-    lv_obj_set_height(header, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(header, 0, 0);
-    lv_obj_clear_flag(header, LV_OBJ_FLAG_CLICKABLE);
+    /* Same status bar as the dashboard, so every screen shares the look. */
+    ui_make_status_bar(screen);
 
-    auto* title = lv_label_create(header);
-    lv_label_set_text(title, "Showcase");
-    lv_obj_set_style_text_font(title, ui_font(24, SD), 0);
-    lv_obj_set_style_text_color(title, theme.dark_mode ? lv_color_hex(0xECEDEF)
-                                                       : lv_color_hex(0x1B1B1F), 0);
-    lv_obj_set_pos(title, ui_dpx(24, SD), ui_dpx(16, SD));
-    ui_decorative(title);
+    /* ---- App bar --------------------------------------------------------- */
+    ui_make_app_bar(screen, "Showcase", true);
 
     auto* body = lv_obj_create(screen);
     lv_obj_set_width(body, LV_PCT(100));
@@ -444,11 +499,22 @@ void build_showcase_screen_impl(int /*dpi*/) {
 
     for (int i = 0; i < 4; i++) {
         Window::Config cfg;
-        cfg.kf_closed    = {180, 200 + i * 80, 180, 60, 0};
-        cfg.kf_opened    = {30, 200, 1020, 700, 255};
+        cfg.kf_closed    = {LV_HOR_RES / 2 - 90, LV_VER_RES / 2 - 30 + i * 40, 180, 60, 0};
+        /* Open to a centred rectangle that fits the actual screen (the old
+         * hardcoded 1020x700 was sized for a desktop build). */
+        const int sb = ui_dpx(52, SD);
+        const int avail_w = LV_HOR_RES - ui_dpx(24, SD);
+        const int avail_h = LV_VER_RES - sb - ui_dpx(24, SD);
+        const int win_w = avail_w * 92 / 100;
+        const int win_h = avail_h * 85 / 100;
+        cfg.kf_opened    = {(LV_HOR_RES - win_w) / 2,
+                            sb + (avail_h - win_h) / 2,
+                            win_w, win_h, 255};
         cfg.title        = defs[i].name;
-        cfg.bg_color     = 0x151B28;
-        cfg.border_color = defs[i].accent;
+        cfg.bg_color     = rgb_hex(ui_palette().card);
+        cfg.border_color = rgb_hex(ui_palette().divider);
+        cfg.title_color  = rgb_hex(ui_palette().text);
+        cfg.radius       = ui_dpx(28, SD);
         g_show.tiles.push_back(Tile());
         make_tile(body, defs[i].icon, defs[i].name, defs[i].accent, cfg, defs[i].fn);
     }

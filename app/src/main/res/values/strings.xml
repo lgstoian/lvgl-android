@@ -8,14 +8,25 @@
     <string name="camera_status_error">Camera status: error - %1$s</string>
     <string name="camera_status_denied">Camera status: permission denied</string>
 
-    <!-- Game sample scoreboard (rendered inside LVGL) -->
-    <string name="game_status_initial">Score: 0 | Frames: 0</string>
-    <string name="game_status">Score: %1$d | Frames: %2$d</string>
+    <!-- Launcher sample: the app grid is rendered by the native UI kit -->
 
-    <!-- Launcher sample app list (rendered inside LVGL) -->
-    <string name="launcher_status_loading">Loading apps.</string>
-    <string name="launcher_count">Installed apps (%1$d):\n\n</string>
-    <string name="launcher_item">- %1$s\n</string>
-    <string name="launcher_more">\n... and %1$d more</string>
-    <string name="launcher_error">Error loading apps: %1$s</string>
+    <!-- App Demo: the Kotlin UI builder (LvglUi) -->
+    <string name="app_demo_title">App Demo</string>
+    <string name="app_demo_heading">Built in Kotlin</string>
+    <string name="app_demo_body">This screen is declared with LvglUi and rendered by the native UI kit.</string>
+    <string name="app_demo_button_section">Button</string>
+    <string name="app_demo_taps">Taps: %1$d</string>
+    <string name="app_demo_tap">Tap me</string>
+    <string name="app_demo_slider_section">Slider</string>
+    <string name="app_demo_value">Value: %1$d</string>
+    <string name="app_demo_toggles_section">Toggles</string>
+    <string name="app_demo_notifications">Enable notifications</string>
+    <string name="app_demo_gauges_section">Gauges</string>
+    <string name="app_demo_dropdown_section">Dropdown</string>
+    <string name="app_demo_option">Selected: %1$d</string>
+    <string name="app_demo_licenses">Open source licenses</string>
+
+    <!-- Open source notices (Play policy: the app must disclose the licenses of
+         the open-source software it uses). -->
+    <string name="licenses_text">LVGL 9.6.0\nMIT License\nCopyright (c) 2026 LVGL LLC and contributors.\nhttps://lvgl.io\n\nAndroidX (AppCompat, Core, Activity, Lifecycle)\nApache License 2.0\nCopyright (c) The Android Open Source Project.\nhttps://developer.android.com/jetpack\n\nKotlin Standard Library\nApache License 2.0\nCopyright (c) 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.\nhttps://kotlinlang.org\n\nThis application collects no personal data. Device information (SoC, memory, storage, display, camera and sensor counts) is read locally to render the device dashboard and never leaves the device.</string>
 </resources>

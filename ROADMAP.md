@@ -1,7 +1,7 @@
 # LVGL Android Framework — Development Roadmap
 
-> Last updated: 2026-10-31
-> Current Phase: Complete — All 14 phases done
+> Last updated: 2026-11-04
+> Current Phase: Phase 23 — Google Play compatibility
 
 ## Overview
 
@@ -103,6 +103,119 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 - CI workflow expanded with release builds
 - Multi-ABI: arm64-v8a + x86_64 both build and package; armeabi-v7a blocked by NDK r26b + CMake 3.22.1
 
+### Phase 15: M5Tab5-Style Device Dashboard ✅
+- Home screen is now an Android system dashboard (screen id 0): full-screen
+  schematic drawn with LVGL primitives, floating control panels, status bar
+- Schematic chips describe a generic Android phone (Snapdragon SoC, AMOLED,
+  LPDDR5X, UFS 4.0, Wi-Fi 7, 5G modem, PMIC, USB-C, IMU, NFC, camera, audio)
+- Functional backlight + speaker volume panels drive real Android APIs via the
+  ScreenNavigator bridge (`LvglSystemControl`)
+- All seven samples remain reachable from the Demos panel
+- Every screen has the shared status bar (Wi-Fi, live clock, battery) and the
+  app runs immersive so it does not duplicate the Android system bar
+- Showcase restyled to the same palette; windows open responsive to the screen
+- Fixed: short taps dropped between LVGL polls on slow frames; navigator lost
+  after returning from a child activity
+
+### Phase 16: Beautiful-by-Default UI System ✅
+- `UiTokens` design tokens (spacing, radius, type) are the single source of
+  truth for every default style
+- `ui_make_scaffold` (status bar + header + scrollable body) is used by every
+  sample screen, so new screens are correctly inset and themed by construction
+- Overlap-proof layout primitives: `ui_make_row`, `ui_make_column`,
+  `ui_make_grid`, `ui_make_card`, `ui_make_section`, `ui_make_list_row`
+- `ui_fit_label` shrinks text to fit its box instead of clipping
+- Native layout lint reports overlapping siblings, out-of-bounds children and
+  clipped text to logcat (`LVGLLayout`) and to a JSON report
+  (`LvglEngine.dumpLayoutReport()`)
+- `LayoutLintRules` + `LayoutLintGuardTest` validate the report (with canaries);
+  the dynamic harness fails when any lint warning appears
+
+### Phase 17: Device-Aware Dashboard + Window Polish ✅
+- The home map is now a phone outline filled with the components actually
+  detected on the device (SoC, RAM, storage, display, cameras, sensors)
+- `LvglDeviceInfo` collects Build / MemoryInfo / StatFs / DisplayMetrics /
+  CameraManager / SensorManager facts and maps platform ids to marketing names
+- Showcase windows use an opaque scrim and fuller content (gauges, four stat
+  rows, two progress bars)
+- Fixed: the window backdrop opacity was overridden by `apply_anim_values`, so
+  launcher tiles showed through
+- Fixed: chip labels spread to the chip edges; map chips now position their two
+  lines explicitly
+
+### Phase 18: Material 3 Palette & Component Kit ✅
+- `MaterialPalette` defines the 20 Material 3 tonal roles in a fixed index order
+  shared with the native `MaterialRole` enum; `MaterialTheme` resolves the
+  baseline scheme or Material You dynamic color (API 31+) and follows the system
+  dark/light mode (BC-029)
+- Native component kit: `ui_make_button` (filled/tonal/outlined/text + danger),
+  `ui_make_chip`, `ui_make_fab`, `ui_make_m3_card`, `ui_make_text_field`,
+  `ui_make_divider`, `ui_make_bottom_nav`, `ui_make_dialog`, `ui_make_snackbar`
+  and `ui_make_app_bar` (BC-030)
+- The dashboard uses M3 buttons, chips and a theme FAB; the widget showcase has a
+  `MATERIAL 3` gallery demonstrating every component
+- The showcase follows the palette and uses the M3 app bar
+
+### Phase 19: APK Size Budget ✅
+- Release: R8 full mode, resource shrinking, per-ABI splits, static C++ STL,
+  legacy native packaging and `resConfigs("en")`
+- Per-ABI APK: 8.4 MB → ~1.3 MB; universal APK: ~2.1 MB
+- `tools/size-report.ps1` enforces 4 MB per ABI / 6 MB universal in CI (BC-031)
+- Build artifacts removed from git; `.gitignore` covers `build/`, `.gradle/`,
+  `.cxx/` and `screenshots/dynamic/`
+
+### Phase 20: Developer Toolkit & Release Prep ✅
+- `docs/quickstart.md`, `docs/public-api.md`, `template/` (copyable standalone
+  app) and the `com.lvgl.android.app` Gradle plugin (`build-logic/`) that
+  scaffolds a new module (BC-032)
+- `lvgl-android/consumer-rules.pro` keeps the JNI entry points and public API
+- `lvgl-android/api/lvgl-android.api` + `:lvgl-android:apiCheck` gate API changes
+- `maven-publish` coordinates `com.lvgl.android:lvgl-android:1.0.0`
+- `CHANGELOG.md`, `docs/release-checklist.md`, `tools/bump-version.ps1`
+- Release workflow: signed per-ABI APKs + AAB + `SHA256SUMS.txt`
+
+### Phase 21: Kotlin UI Builder & SDK Docs ✅
+- `LvglUi` DSL: apps declare their own screens in Kotlin (`column`, `row`,
+  `label`, `button`, `slider`, `toggle`, `checkbox`, `progress`, `arc`,
+  `divider`, `spacer`), serialised to JSON and rendered by the native UI kit
+- Node callbacks and `LvglUi.listener` deliver taps/value changes as typed
+  `LvglUiEvent`s; `LvglUi.updateNode()` patches a node from any thread
+- App screen ids start at `APP_SCREEN_BASE` (1000); `nativeSetScreen` accepts them
+- `AppDemoActivity` + `AppDemoScreen` demonstrate the builder end to end
+- KDoc on the whole public API and Dokka HTML output (`:lvgl-android:dokkaHtml`)
+- Standard KDoc tags are accepted by the machine-comment schema (BC-034)
+- `LvglEngine.initialize()` reports a missing native library through
+  `nativeLoadError` instead of crashing
+
+### Phase 22: Showcase Window Layout & Launcher Grid ✅
+- Fixed the showcase window content: it is now top-aligned with a consistent
+  12 dp gap instead of vertically centred (which left a large empty area and let
+  tall content overflow the header)
+- Fixed the System window gauges: the two columns now share the row equally and
+  the arcs are sized to fit, so they no longer overlap or spill outside the window
+- Fixed the Sensors window: the bars grow to fill the row, so the sensor names
+  no longer sit on top of the bars
+- Launcher demo: the installed apps are collected on a background thread and
+  rendered as a native scrollable grid; tapping an app launches it through a new
+  `LauncherAppListener` bridge
+- `LvglUi` dropdown node (options + selection callback) and the matching
+  `LvglUiEvent.Selected` event
+
+### Phase 23: Google Play Compatibility ✅
+- Target API 36 (the Play requirement from 31 August 2026), 64-bit ABIs, AAB
+  output and release signing.
+- Manifest: `dataExtractionRules`, `fullBackupContent`, `localeConfig`,
+  `enableOnBackInvokedCallback`, `resizeableActivity`, and a `LAUNCHER` package
+  visibility query.
+- Only the optional `CAMERA` permission is requested, at runtime, and the app is
+  fully usable without it.
+- `LicensesActivity` discloses the LVGL / AndroidX / Kotlin licences in-app.
+- `PRIVACY.md` and `docs/play-store.md` document the privacy policy and the
+  Play release checklist.
+- `PlayComplianceGuardTest` machine-checks the target API, ABIs, manifest
+  attributes, permission set, backup resources, privacy policy and licence
+  disclosure.
+
 ---
 
 ## Progress Tracking
@@ -123,6 +236,15 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 | Phase 12: Additional Sample Apps | ✅ Complete | 2026-10-16 | 2026-10-16 |
 | Phase 13: Testing & CI | ✅ Complete | 2026-10-16 | 2026-10-16 |
 | Phase 14: Multi-ABI & Performance | ✅ Complete | 2026-10-16 | 2026-10-16 |
+| Phase 15: M5Tab5-Style Device Dashboard | ✅ Complete | 2026-11-03 | 2026-11-03 |
+| Phase 16: Beautiful-by-Default UI System | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 17: Device-Aware Dashboard + Window Polish | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 18: Material 3 Palette & Component Kit | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 19: APK Size Budget | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 20: Developer Toolkit & Release Prep | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 21: Kotlin UI Builder & SDK Docs | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 22: Showcase Window Layout & Launcher Grid | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 23: Google Play Compatibility | ✅ Complete | 2026-11-04 | 2026-11-04 |
 
 ## Architecture Decision Records
 
@@ -241,8 +363,73 @@ path made `exists()` false), so green did not mean safe.
 each detector a broken fixture that must be detected (no false green) and a
 clean fixture that must not be (no false positive). See `BC-014`.
 
+### ADR-014: Material 3 Component Kit
+
+**Status**: Accepted
+
+**Context**: Apps should look and behave natively while staying pure LVGL, but
+hand-rolled widgets drifted from Material and did not follow the theme.
+
+**Decision**: A native component kit renders Material 3 from the tonal palette;
+every component reads `ui_palette()` so a whole app re-themes by construction.
+See `BC-030`.
+
+### ADR-015: Balanced APK Size Budget
+
+**Status**: Accepted
+
+**Context**: The unminified universal release was 8.4 MB, which is too large for
+a "small, efficient" framework.
+
+**Decision**: Enable R8 full mode, resource shrinking, per-ABI splits, the static
+C++ STL, legacy native packaging and English-only resources. Budget: 4 MB per
+ABI, 6 MB universal, enforced by `tools/size-report.ps1` in CI. See `BC-031`.
+
+### ADR-016: Developer Toolkit
+
+**Status**: Accepted
+
+**Context**: Starting a new app should take minutes, not a copy of the sample.
+
+**Decision**: Ship a quickstart, a public API reference, a copyable `template/`, a
+`com.lvgl.android.app` Gradle plugin, consumer ProGuard rules and a
+binary-compatibility API dump. See `BC-032`.
+
+### ADR-017: Kotlin UI Builder
+
+**Status**: Accepted
+
+**Context**: The public API was screen-level only — an app could pick one of eight
+built-in screens but could not build its own UI, which made the framework
+unsuitable for real apps.
+
+**Decision**: Apps declare screens with the `LvglUi` Kotlin DSL. The tree is
+serialised to JSON, rendered by the existing native UI kit (so there is still one
+source of truth for widget styling), and interactions return as typed events.
+App screen ids start at 1000. See `BC-033`.
+
 ## Change Log
 
 - **2026-10-16**: Roadmap created. Phases 1-8 marked complete.
 - **2026-10-16**: Phases 9-14 complete. Rendering fixed. Performance monitor, CI, unit tests added.
 - **2026-10-31**: Added ADR-011..013: machine-readable comment schema, breadcrumb trail, and canary tests (BC-014/015).
+- **2026-11-03**: Phase 15 — M5Tab5-style device dashboard replaces the list menu as
+  the home screen; full app restyle; functional backlight/volume panels
+  (BC-020..025).
+- **2026-11-04**: Phase 16 — design tokens, screen scaffold, overlap-proof layout
+  primitives, text auto-fit and the layout lint with CI reporting (BC-027).
+- **2026-11-04**: Phase 17 — the dashboard map reflects the real device and the
+  showcase windows use an opaque scrim with fuller content (BC-028).
+- **2026-11-04**: Phase 18 — Material 3 tonal palette with dynamic color and a
+  native Material 3 component kit (BC-029/030).
+- **2026-11-04**: Phase 19 — balanced size optimisation: ~1.3 MB per ABI with a CI
+  size budget (BC-031).
+- **2026-11-04**: Phase 20 — developer toolkit (quickstart, public API, template,
+  Gradle plugin, API dump, publishing, release workflow) (BC-032).
+- **2026-11-04**: Phase 21 — Kotlin UI builder (`LvglUi`), app-defined screens,
+  KDoc + Dokka, and the `AppDemoActivity` demo (BC-033/034).
+- **2026-11-04**: Phase 22 — showcase window content top-aligned, gauge/sensor
+  overlaps fixed, and a real launcher app grid with tap-to-launch.
+- **2026-11-04**: Phase 23 — Google Play compatibility: target API 36, backup
+  rules, predictive back, locale config, privacy policy and licence disclosure
+  (BC-035).

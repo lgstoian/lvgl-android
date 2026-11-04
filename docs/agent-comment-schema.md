@@ -43,6 +43,18 @@ Rules:
 Unknown tags are a build failure. Dangling `@breadcrumb`/`@decision` references
 are a build failure. Unparsable `@machine-json` is a build failure.
 
+## Standard KDoc tags
+
+The parser also recognises the standard KDoc documentation tags so that API
+documentation can live next to the machine annotations:
+
+`@param`, `@return`, `@property`, `@throws`, `@exception`, `@see`, `@since`,
+`@deprecated`, `@author`, `@sample`, `@suppress`
+
+They carry prose, not `key=value` pairs, so they are **not** validated as
+machine annotations: no reference checks, no orphan checks, no JSON checks. Do
+not use them to carry machine-readable data — add a machine tag instead.
+
 ## Examples
 
 ```kotlin

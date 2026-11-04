@@ -27,4 +27,13 @@ class LvglEngineLifecycleInstrumentedTest {
         assertTrue("engine should be initialized", engine.initialized)
         assertTrue("last error should be empty", engine.lastError().isEmpty())
     }
+
+    @Test
+    fun layoutReportIsWellFormedJson() {
+        val engine = LvglEngine.instance
+        engine.initialize()
+        val report = engine.dumpLayoutReport()
+        assertTrue("report should be an object: $report", report.trimStart().startsWith("{"))
+        assertTrue("report should contain an issues array: $report", report.contains("issues"))
+    }
 }

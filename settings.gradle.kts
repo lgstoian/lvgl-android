@@ -1,4 +1,6 @@
 pluginManagement {
+    // Included build that provides the com.lvgl.android.app scaffolding plugin.
+    includeBuild("build-logic")
     repositories {
         google()
         mavenCentral()

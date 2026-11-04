@@ -13,11 +13,13 @@ import com.lvgl.android.engine.LvglEngine
 /**
  * Combines Android MotionEvent handling with LVGL touch input.
  *
- * Raw touch events are ALWAYS forwarded to LVLV so widgets work. Gesture
+ * Raw touch events are ALWAYS forwarded to LVGL so widgets work. Gesture
  * detection runs alongside as a side-channel (LVGL does its own hit-testing),
  * so we never drop an UP event or re-send a DOWN at the wrong coordinate —
  * the previous version sent ACTION_DOWN on tap and never sent RELEASED, which
  * left widgets stuck in the pressed state.
+ *
+ * Call [processMotionEvent] from the view's `onTouchEvent`, on the UI thread.
  */
 class LvglInputProcessor(private val context: Context) {
 
@@ -25,7 +27,17 @@ class LvglInputProcessor(private val context: Context) {
     private var latestX = 0f
     private var latestY = 0f
 
-    /** Returns a detected gesture, or null. Raw touch is always forwarded. */
+    /**
+     * Forwards [event] to LVGL and returns any gesture it produced.
+     *
+     * Down/move/up are translated to LVGL input actions `0`, `2` and `1`
+     * respectively; the raw coordinates are preserved for every pointer. The
+     * gesture result is side-channel information for the caller and never
+     * suppresses the touch itself.
+     *
+     * @param event the Android touch event to process.
+     * @return the detected [Gestures], or `null` when no gesture was recognised.
+     */
     fun processMotionEvent(event: MotionEvent): Gestures? {
         recognizer.handle(event)
 
@@ -53,6 +65,7 @@ class LvglInputProcessor(private val context: Context) {
         return recognizer.consumeLastGesture()
     }
 
+    /** Holds the private log tag. */
     companion object {
         private const val TAG = "LvglInputProcessor"
     }

@@ -57,6 +57,9 @@ jobs:
     - name: Build debug and release
       run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
 
+    - name: Report APK size
+      run: pwsh ./tools/size-report.ps1
+
     - name: Lint
       run: ./gradlew lintDebug --no-daemon
 
@@ -66,6 +69,14 @@ jobs:
       # GuardCanaryTest proves each detector catches a violation and ignores a
       # clean fixture; MachineCommentValidationTest validates every annotation.
       run: ./gradlew :lvgl-android:testDebugUnitTest :app:testDebugUnitTest :lvgl-android:testReleaseUnitTest --no-daemon --stacktrace
+
+    - name: Check public API compatibility
+      # Fails when the library's public ABI changes without a matching
+      # api/lvgl-android.api update (run `:lvgl-android:apiDump` deliberately).
+      run: ./gradlew :lvgl-android:apiCheck --no-daemon --stacktrace
+
+    - name: Test the scaffolding plugin
+      run: ./gradlew :build-logic:test --no-daemon --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4

@@ -29,6 +29,8 @@ object GuardRules {
         "demo-ui-single-source",
         "machine-comments",
         "guard-canary",
+        "layout-lint",
+        "play-compliance",
     )
 
     data class Violation(

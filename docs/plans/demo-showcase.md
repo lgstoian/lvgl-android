@@ -1,5 +1,10 @@
 # Plan: Animated Demo Showcase + Spring Animation Toolkit
 
+> **Historical plan.** This document is the original design for the animation
+> engine and the showcase demo. All phases are complete; see [ROADMAP.md](../../ROADMAP.md)
+> for the current status and [docs/quickstart.md](../../docs/quickstart.md) for
+> how to use the result.
+
 ## Goal
 
 Build a visually impressive, highly interactive demo for the Android LVGL toolkit,

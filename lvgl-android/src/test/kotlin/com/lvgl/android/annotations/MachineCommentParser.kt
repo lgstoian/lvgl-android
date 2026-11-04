@@ -13,14 +13,22 @@ import java.io.File
  * under plain JUnit.
  *
  * @breadcrumb BC-015
+ * @breadcrumb BC-034
  * @guard-rule rule=machine-comments test=MachineCommentValidationTest
  */
 object MachineCommentParser {
 
+    /** Standard KDoc documentation tags. Allowed in source, but never treated as
+     *  machine annotations (they carry prose, not `key=value` pairs). */
+    val KDOC_TAGS: Set<String> = setOf(
+        "param", "return", "property", "throws", "exception", "see", "since",
+        "deprecated", "author", "sample", "suppress"
+    )
+
     val KNOWN_TAGS: Set<String> = setOf(
         "guard-rule", "invariant", "decision", "breadcrumb", "machine-json",
         "contract", "ai-hint", "why", "do-not", "trap"
-    )
+    ) + KDOC_TAGS
 
     /** A single parsed annotation. */
     data class Annotation(

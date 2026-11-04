@@ -9,6 +9,18 @@ import android.util.Log
 import android.os.SystemClock
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * Lightweight frame-rate and frame-time monitor for LVGL rendering.
+ *
+ * Call [start] once rendering begins, [onFrameRendered] once per frame and
+ * [stop] when rendering ends. The monitor logs one line per second with the
+ * current FPS and frame-time statistics, and exposes the same values through
+ * [getFps], [getFrameCount] and [getStats].
+ *
+ * The state is intentionally not synchronised: call every method from the same
+ * thread (normally the LVGL render thread). It is a debugging aid, not a
+ * production profiling tool.
+ */
 object LvglPerformanceMonitor {
 
     private val frameCount = AtomicLong(0)
@@ -23,6 +35,7 @@ object LvglPerformanceMonitor {
     private var running = false
     private var startTime = 0L
 
+    /** Starts a new measurement window and resets the cumulative frame count. */
     fun start() {
         running = true
         startTime = SystemClock.elapsedRealtime()
@@ -31,11 +44,18 @@ object LvglPerformanceMonitor {
         Log.i(TAG, "Performance monitor started")
     }
 
+    /** Stops the monitor and logs the total frame count. */
     fun stop() {
         running = false
         Log.i(TAG, "Performance monitor stopped. Total frames: ${frameCount.get()}")
     }
 
+    /**
+     * Records one rendered frame.
+     *
+     * Does nothing unless [start] has been called. Called once per frame from
+     * the render thread.
+     */
     fun onFrameRendered() {
         if (!running) return
         val now = SystemClock.elapsedRealtimeNanos()
@@ -62,8 +82,20 @@ object LvglPerformanceMonitor {
         }
     }
 
+    /** Frames per second over the last completed one-second window. */
     fun getFps(): Int = lastFps
+
+    /** Total frames recorded since [start]. */
     fun getFrameCount(): Long = frameCount.get()
+
+    /**
+     * A snapshot of the current statistics.
+     *
+     * Keys: `fps`, `frameCount`, `avgFrameTimeMs`, `minFrameTimeMs` and
+     * `maxFrameTimeMs`.
+     *
+     * @return the statistics map; frame-time values are in milliseconds.
+     */
     fun getStats(): Map<String, Any> = mapOf(
         "fps" to lastFps,
         "frameCount" to frameCount.get(),
@@ -72,6 +104,11 @@ object LvglPerformanceMonitor {
         "maxFrameTimeMs" to maxFrameTime
     )
 
+    /**
+     * Clears the accumulated frame-time statistics.
+     *
+     * The cumulative [getFrameCount] and the running flag are left untouched.
+     */
     fun resetStats() {
         frameTimeSum = 0
         frameTimeCount = 0

@@ -5,24 +5,20 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.sample
 
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import com.lvgl.android.game.LvglGameActivity
 import com.lvgl.android.navigation.LvglNavigation
 
 /**
- * Demonstrates the LVGL Game Activity with a vsync-aware game loop.
+ * Demonstrates [LvglGameActivity] and the native game screen.
  *
- * The score is rendered inside LVGL via the engine's status text API. The
- * game loop is driven by a Choreographer frame callback (vsync-aware), and
- * status updates are marshalled back to the LVGL thread.
+ * The screen itself (target, score, hit testing) is rendered and updated by the
+ * native UI kit in `demo_ui.cpp`; this activity supplies the vsync-aware frame
+ * loop that a real game would use for its own simulation.
  */
 class GameSampleActivity : LvglGameActivity() {
 
-    private var score = 0
-    private var frameCount = 0
     private val handler = Handler(Looper.getMainLooper())
 
     private val tick = object : Runnable {
@@ -37,8 +33,6 @@ class GameSampleActivity : LvglGameActivity() {
         targetFps = 60
         immersiveMode = true
         setLvglScreen(5)
-        com.lvgl.android.engine.LvglEngine.instance.setStatusText(getString(R.string.game_status_initial))
-        Log.d(TAG, "Game sample initialised with targetFps=$targetFps")
     }
 
     override fun onResume() {
@@ -52,16 +46,7 @@ class GameSampleActivity : LvglGameActivity() {
     }
 
     override fun onGameLoop(deltaMs: Long) {
-        frameCount++
-        if (frameCount % 60 == 0) {
-            score += 10
-            com.lvgl.android.engine.LvglEngine.instance.setStatusText(
-                getString(R.string.game_status, score, frameCount)
-            )
-        }
-    }
-
-    companion object {
-        private const val TAG = "GameSampleActivity"
+        /* A real game would advance its simulation here. The LVGL render thread
+         * already drives the UI; the native game screen handles input. */
     }
 }

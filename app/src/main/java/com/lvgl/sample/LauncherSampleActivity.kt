@@ -5,52 +5,54 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.sample
 
-import android.os.Bundle
 import android.util.Log
+import com.lvgl.android.engine.LvglEngine
+import com.lvgl.android.launcher.LauncherAppListener
 import com.lvgl.android.launcher.LvglLauncherActivity
 import com.lvgl.android.navigation.LvglNavigation
 
 /**
- * Demonstrates the LVGL Launcher Activity with app-list retrieval.
- *
- * The installed-app list is rendered inside LVGL via the engine's status text
- * API (see ai-context.md - LvglActivity subclasses must not setContentView()).
+ * Demonstrates [LvglLauncherActivity]: the installed apps are collected on a
+ * background thread, pushed to the native launcher grid and launched when tapped.
  */
 class LauncherSampleActivity : LvglLauncherActivity() {
 
     override fun onCreateLvgl() {
         LvglNavigation.pushScreen("LauncherSample")
         setLvglScreen(6)
-        com.lvgl.android.engine.LvglEngine.instance.setStatusText(getString(R.string.launcher_status_loading))
+        LvglEngine.instance.launcherAppListener = LauncherAppListener { pkg ->
+            runOnUiThread { launchApp(pkg) }
+        }
         loadAppList()
     }
 
     private fun loadAppList() {
-        /* Querying packages + loading labels for up to 20 apps is slow; do it off
-         * the main thread so the UI never janks. */
+        /* Querying packages + loading labels for every app is slow; do it off the
+         * main thread so the UI never janks. */
         Thread {
             try {
                 val apps = getAppList()
-                val sb = StringBuilder()
-                sb.append(getString(R.string.launcher_count, apps.size))
-                apps.take(20).forEach { app ->
-                    sb.append(getString(R.string.launcher_item, app.loadLabel(packageManager)))
+                    .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+                    .take(MAX_APPS)
+                val labels = Array(apps.size) { apps[it].loadLabel(packageManager).toString() }
+                val packages = Array(apps.size) { apps[it].packageName }
+                runOnUiThread {
+                    LvglEngine.instance.setLauncherApps(labels, packages)
+                    setLvglScreen(6)
                 }
-                if (apps.size > 20) {
-                    sb.append(getString(R.string.launcher_more, apps.size - 20))
-                }
-                com.lvgl.android.engine.LvglEngine.instance.setStatusText(sb.toString())
             } catch (e: Exception) {
-                com.lvgl.android.engine.LvglEngine.instance.setStatusText(
-                    getString(R.string.launcher_error, e.message)
-                )
+                Log.e(TAG, "Failed to load apps", e)
             }
         }.start()
     }
 
     override fun onAllAppsChanged() {
-        Log.d(TAG, "App list changed")
         loadAppList()
+    }
+
+    override fun onDestroy() {
+        LvglEngine.instance.launcherAppListener = null
+        super.onDestroy()
     }
 
     override fun onPackageAdded(packageName: String) {
@@ -67,5 +69,6 @@ class LauncherSampleActivity : LvglLauncherActivity() {
 
     companion object {
         private const val TAG = "LauncherSampleActivity"
+        private const val MAX_APPS = 60
     }
 }

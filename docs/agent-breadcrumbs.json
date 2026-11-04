@@ -280,7 +280,7 @@
         "lvgl-android/src/main/cpp/demo_ui.cpp",
         "lvgl-android/src/main/cpp/lvgl_port.cpp"
       ],
-      "symbols": ["launch_screen", "build_menu_screen", "ui_set_nav_hooks"],
+      "symbols": ["launch_screen", "build_home_screen", "ui_set_nav_hooks"],
       "see_also": [],
       "do_not": ["Do not build screens directly in lvgl_port.cpp."],
       "ai_hint": "A screen change belongs in demo_ui.cpp, not the engine."
@@ -341,6 +341,365 @@
       "see_also": ["BC-017"],
       "do_not": ["Do not add a large overlay as a plain child of a flex parent."],
       "ai_hint": "If an overlay makes siblings vanish, it is participating in the parent's layout."
+    },
+    {
+      "id": "BC-020",
+      "title": "Dashboard replaces the list menu as the home screen",
+      "decision": "Screen id 0 (SCREEN_HOME) builds the M5Tab5-style device dashboard: a full-screen Android system schematic with floating control panels and a status bar; the seven samples are reached from a Demos panel.",
+      "rationale": "The old list menu was generic. The reference device's look is a dashboard of floating panels over a schematic, and keeping every sample reachable satisfies the no-feature-removals hard rule.",
+      "consequences": [
+        "SCREEN_HOME is the entry screen; the list menu screen no longer exists.",
+        "All seven samples remain reachable from the Demos panel on the dashboard."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "app/src/main/java/com/lvgl/sample/MainActivity.kt"
+      ],
+      "symbols": ["SCREEN_HOME", "build_home_screen", "kDemos"],
+      "see_also": ["BC-016"],
+      "do_not": ["Do not remove a sample from the Demos panel."],
+      "ai_hint": "Adding a sample means adding a row to kDemos plus a screen builder, not a new home screen."
+    },
+    {
+      "id": "BC-021",
+      "title": "Schematic is drawn with LVGL primitives, not an image asset",
+      "decision": "The dashboard schematic is rendered from lv_obj rectangles, lv_line buses and labels in a 100x100 design space scaled to the diagram's pixel rectangle.",
+      "rationale": "A bitmap background would need an asset pipeline and would not scale across phone densities and orientations; primitives stay core-only and DPI-adaptive.",
+      "consequences": [
+        "Chip layout is the kChips table of names, sub-labels, relative positions and bus colours.",
+        "One layout renders in portrait and landscape via non-uniform scaling."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp"
+      ],
+      "symbols": ["ui_make_diagram", "ChipDef", "kChips"],
+      "see_also": ["BC-019"],
+      "do_not": ["Do not replace the schematic with a fixed-pixel bitmap."],
+      "ai_hint": "If chips overlap in portrait, adjust the kChips percentages rather than the drawing code."
+    },
+    {
+      "id": "BC-022",
+      "title": "Status bar clock is an lv_timer torn down with its screen",
+      "decision": "The status bar and RTC panel share one 1 s lv_timer; make_screen deletes it before lv_obj_clean so it never touches freed labels. The battery level is pushed from Kotlin and cached.",
+      "rationale": "lv_timer objects survive lv_obj_clean, so a timer left running would dereference labels freed by the next screen build.",
+      "consequences": [
+        "g_clock_timer is deleted at the top of make_screen().",
+        "The native side caches the battery level and re-applies it on dashboard build."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt"
+      ],
+      "symbols": ["ui_make_status_bar", "clock_tick", "ui_set_battery_level", "nativeSetBatteryLevel"],
+      "see_also": ["BC-023"],
+      "do_not": ["Do not create the clock timer without deleting it on screen change."],
+      "ai_hint": "A frozen clock after switching screens means the timer was deleted; a crash means it was not."
+    },
+    {
+      "id": "BC-023",
+      "title": "Backlight and volume panels drive real Android APIs",
+      "decision": "The dashboard's backlight/volume panels call ui_set_system_hooks; the port forwards them through the ScreenNavigator's optional setBrightness/setVolumePercent methods to LvglSystemControl, which applies window brightness and the music stream volume.",
+      "rationale": "The reference device's control panels are functional; on Android the equivalent effects are per-window brightness and AudioManager volume. PowerManager.goToSleep() needs the system-only DEVICE_POWER permission, so the Power panel stays simulated.",
+      "consequences": [
+        "LvglEngine.ScreenNavigator has default no-op system methods and the native bridge resolves them optionally.",
+        "LvglSystemControl is the single source of truth for these Android calls.",
+        "Window brightness must be posted to the UI thread; AudioManager is thread-safe and is called directly."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/system/LvglSystemControl.kt"
+      ],
+      "symbols": ["ui_set_system_hooks", "sys_set_brightness", "sys_set_volume", "LvglSystemControl", "setBrightness", "setVolumePercent"],
+      "see_also": ["BC-022"],
+      "do_not": ["Do not call PowerManager.goToSleep() from an app, set screenBrightness below 1%, or touch WindowManager assets from the LVGL thread."],
+      "ai_hint": "If a panel tap does nothing, check that the navigator implements setBrightness/setVolumePercent, that the method IDs resolved, and that view changes are posted to the UI thread."
+    },
+    {
+      "id": "BC-024",
+      "title": "Short taps are held until LVGL polls them once",
+      "decision": "The native touch path holds a press until LVGL has observed it: touch_read_cb reports PRESSED while touchPressSeen is false, and nativeTouchEvent clears that flag on ACTION_DOWN.",
+      "rationale": "LVGL polls the input device once per rendered frame, and with software GL a frame can take hundreds of milliseconds. A tap whose DOWN/UP pair lands entirely between two polls was never seen as pressed and produced no click.",
+      "consequences": [
+        "A tap registers no matter how short, even when frames are very slow.",
+        "The press is held for at most one LVGL poll after a real press, so long-press timing is unaffected."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["touchPressSeen", "touch_read_cb", "nativeTouchEvent"],
+      "see_also": [],
+      "do_not": ["Do not clear touchPressSeen before LVGL has polled the press."],
+      "ai_hint": "If a tap is dropped only on a slow frame, check that the press-held flag is cleared on ACTION_DOWN and set once LVGL polls it."
+    },
+    {
+      "id": "BC-025",
+      "title": "Navigator is restored in onResume",
+      "decision": "LvglActivity stores its ScreenNavigator in a field, re-registers it in onResume when the engine's navigator is no longer the same object, and only clears it in onDestroy while it is still this activity's.",
+      "rationale": "A child activity that is destroyed sets the engine's navigator to null; relying on onCreate alone left the parent's dashboard unable to navigate (nav_valid() false) after BACK. The parent's onResume also runs BEFORE the child's onDestroy, so an unconditional clear would wipe the freshly restored bridge.",
+      "consequences": [
+        "Returning from a sample with BACK restores LVGL navigation.",
+        "The navigator is a field rather than an anonymous object created in onCreate.",
+        "onDestroy compares identity before clearing, so it never clobbers a sibling's bridge."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt"
+      ],
+      "symbols": ["navigator", "onResume", "screenNavigator"],
+      "see_also": ["BC-020"],
+      "do_not": ["Do not rely on onCreate alone to keep the navigator registered."],
+      "ai_hint": "If dashboard taps do nothing after returning from a screen, check nav_valid() and whether the navigator was re-registered."
+    },
+    {
+      "id": "BC-027",
+      "title": "Design tokens, scaffold, primitives and layout lint",
+      "decision": "The UI kit is built on a token scale (spacing/radius/type), every screen uses ui_make_scaffold (status bar + header + scrollable body), layout primitives always set a flex layout/gap/alignment, text auto-fits its box, and a native layout lint reports overlaps, out-of-bounds children and clipped text to logcat and a JSON report.",
+      "rationale": "Screenshots showed overlapping status-bar items, clipped chip text, a scrollbar covering a stepper button and unbalanced sample screens. Tokens and a scaffold remove whole classes of alignment mistakes, and the lint makes regressions visible in CI instead of in screenshots.",
+      "consequences": [
+        "UiTokens is the single source of truth for spacing, radius and type sizes.",
+        "ui_make_scaffold is used by every sample screen.",
+        "Layout primitives (ui_make_row/column/grid/card/section/list_row) set a layout by construction.",
+        "ui_fit_label shrinks text to fit instead of clipping.",
+        "The lint runs after the first refresh of every screen and logs LVGLLayout warnings.",
+        "LvglEngine.dumpLayoutReport() exposes the same issues as JSON for the harness.",
+        "An empty LV_SIZE_CONTENT container in a flex row resolves to a 480 px default height in this LVGL build; spacers need an explicit height."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/LayoutLintRules.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/LayoutLintGuardTest.kt"
+      ],
+      "symbols": ["UiTokens", "ui_make_scaffold", "ui_fit_label", "ui_layout_check", "ui_layout_report_json", "LayoutLintRules", "nativeDumpLayoutReport"],
+      "see_also": ["BC-020", "BC-021", "BC-022"],
+      "do_not": ["Do not hard-code spacing/radius/font sizes in new screens; use ui_tokens() and the primitives.", "Do not leave an empty LV_SIZE_CONTENT child in a flex row without an explicit height."],
+      "ai_hint": "If a screen looks misaligned, run the lint (LVGLLayout logcat tag) before eyeballing screenshots."
+    },
+    {
+      "id": "BC-028",
+      "title": "Dashboard device map reflects the real device",
+      "decision": "LvglDeviceInfo collects real device facts (Build, ActivityManager.MemoryInfo, StatFs, DisplayMetrics, CameraManager, SensorManager) and pushes them through nativeSetDeviceInfo; ui_set_device_info stores them and ui_make_diagram renders them inside a phone outline with a system bus.",
+      "rationale": "The previous schematic was hard-coded with generic labels, so it said the same thing on every device. Real values make the map a genuine system overview and a useful demonstration of the Android APIs.",
+      "consequences": [
+        "LvglDeviceInfo.socMarketingName maps platform ids to marketing names with a readable fallback.",
+        "LvglActivity collects and pushes the facts in onCreate, before the dashboard is built.",
+        "nativeSetDeviceInfo copies the JNI strings into engine-owned storage; rebuild_screen copies them onto the LVGL thread before building.",
+        "Values the Android APIs do not expose (modem generation, WiFi standard, battery chemistry) show a plausible default.",
+        "Map chips position their two lines explicitly instead of using flex, so the lines always fit and never spread to the chip edges."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/system/LvglDeviceInfo.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/LvglDeviceInfoTest.kt"
+      ],
+      "symbols": ["LvglDeviceInfo", "socMarketingName", "formatSize", "nativeSetDeviceInfo", "ui_set_device_info", "ui_make_diagram"],
+      "see_also": ["BC-021", "BC-027"],
+      "do_not": ["Do not hard-code device values in the UI."],
+      "ai_hint": "If the map shows wrong values, check that pushDeviceInfo runs before the first dashboard build."
+    },
+    {
+      "id": "BC-029",
+      "title": "Material 3 tonal palette with dynamic color",
+      "decision": "MaterialPalette defines the 20 Material 3 tonal roles in a fixed index order, MaterialTheme resolves them from the baseline scheme or the Android system accents (API 31+), and nativeApplyTheme pushes the whole IntArray to LVGL; make_palette derives every UI colour from those roles.",
+      "rationale": "The previous theme passed only primary/secondary, so surfaces, text and chips were hard-coded and did not follow dark mode or Material You. A full tonal palette lets every component re-theme by construction.",
+      "consequences": [
+        "MaterialPalette role indexes are shared with the native MaterialRole enum; reordering breaks the palette.",
+        "MaterialTheme follows the system dark/light mode and can pin an app-local override (the dashboard theme FAB).",
+        "Dynamic color reads system_accent1/2/3_500 on API 31+ and falls back to the baseline scheme below.",
+        "nativeApplyTheme rebuilds the current screen when the palette changes."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/theme/MaterialPalette.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/theme/MaterialTheme.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/theme/LvglThemeBridge.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["MaterialPalette", "MaterialTheme", "materialPalette", "nativeApplyTheme", "UiTheme", "make_palette"],
+      "see_also": ["BC-030"],
+      "do_not": [
+        "Do not reorder the MaterialPalette role constants; native indexes into the array.",
+        "Do not hard-code colours in the UI kit; read ui_palette()."
+      ],
+      "ai_hint": "If colours look wrong after a theme change, verify the palette index order matches MaterialRole."
+    },
+    {
+      "id": "BC-030",
+      "title": "Material 3 component kit on top of LVGL",
+      "decision": "A native component kit (buttons, chips, FAB, cards, text field, bottom nav, dialog, snackbar, top app bar) renders Material 3 from the tonal palette, and the sample app uses it for the dashboard controls and the widget showcase gallery.",
+      "rationale": "Apps should look and behave natively while staying pure LVGL. Hand-rolled widgets drifted from Material; a shared kit makes every app native-looking by construction.",
+      "consequences": [
+        "Every component reads ui_palette()/ui_tokens(), so it re-themes with the active palette.",
+        "Buttons come in filled/tonal/outlined/text styles plus a danger variant.",
+        "Dialogs and snackbars are FLOATING overlays; the layout lint ignores them.",
+        "The dashboard theme FAB toggles an app-local dark-mode override through the ScreenNavigator bridge.",
+        "The widget showcase demonstrates the whole kit in its MATERIAL 3 section."
+      ],
+      "files": [
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_showcase.cpp",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp"
+      ],
+      "symbols": ["ui_make_button", "ui_make_chip", "ui_make_fab", "ui_make_m3_card", "ui_make_bottom_nav", "ui_make_dialog", "ui_make_snackbar", "ui_make_app_bar", "ui_set_theme_hook", "toggleDarkMode"],
+      "see_also": ["BC-029", "BC-027"],
+      "do_not": [
+        "Do not hand-roll Material widgets; use the kit so they re-theme.",
+        "Do not position a FAB/dialog/snackbar without LV_OBJ_FLAG_FLOATING."
+      ],
+      "ai_hint": "If a new control does not follow the theme, make it read ui_palette() instead of hard-coded colours."
+    },
+    {
+      "id": "BC-031",
+      "title": "Balanced APK size optimisation",
+      "decision": "Release builds enable R8 full mode, tree-shaking and resource shrinking, per-ABI splits, the static C++ STL, legacy native packaging and English-only resources; the size budget is 4 MB per ABI and 6 MB universal.",
+      "rationale": "The unminified universal release was 8.4 MB. The balanced target was ~4 MB per ABI while keeping the universal APK available.",
+      "consequences": [
+        "Per-ABI release APKs are ~1.3 MB; the universal APK is ~2.1 MB.",
+        "libc++_shared.so is gone: the STL is linked into liblvgl_android.so.",
+        "The library module keeps isMinifyEnabled=false because enabling it makes lintVitalRelease report false-positive Instantiatable errors.",
+        "tools/size-report.ps1 enforces the budget in CI."
+      ],
+      "files": [
+        "app/build.gradle.kts",
+        "lvgl-android/build.gradle.kts",
+        "gradle.properties",
+        "tools/size-report.ps1",
+        ".github/workflows/ci.yml"
+      ],
+      "symbols": ["splits", "isMinifyEnabled", "isShrinkResources", "useLegacyPackaging", "ANDROID_STL", "size-report.ps1"],
+      "see_also": ["BC-030"],
+      "do_not": [
+        "Do not enable isMinifyEnabled on the library module.",
+        "Do not remove the universal APK."
+      ],
+      "ai_hint": "If the size budget regresses, run tools/size-report.ps1 and check the largest APK entries."
+    },
+    {
+      "id": "BC-032",
+      "title": "Developer toolkit: docs, template, plugin, API dump",
+      "decision": "The repo ships a quickstart, a public API reference, a copyable template/ Gradle project, a build-logic plugin that scaffolds a new LVGL app module, consumer ProGuard rules and a binary-compatibility API dump.",
+      "rationale": "Building an app on the framework should take minutes, not a copy of the sample app. The API dump makes releases predictable.",
+      "consequences": [
+        "template/ builds against the local library via a composite build and the com.lvgl.android:lvgl-android coordinate.",
+        "build-logic provides the com.lvgl.android.app plugin and the createLvglApp task.",
+        "api/lvgl-android.api is checked in CI by :lvgl-android:apiCheck.",
+        "lvgl-android/consumer-rules.pro keeps the JNI entry points and public API."
+      ],
+      "files": [
+        "docs/quickstart.md",
+        "docs/public-api.md",
+        "template/settings.gradle.kts",
+        "template/app/build.gradle.kts",
+        "build-logic/build.gradle.kts",
+        "build-logic/src/main/kotlin/com/lvgl/android/build/LvglAppPlugin.kt",
+        "lvgl-android/consumer-rules.pro",
+        "lvgl-android/api/lvgl-android.api",
+        "settings.gradle.kts"
+      ],
+      "symbols": ["LvglAppPlugin", "LvglAppGenerator", "createLvglApp", "apiCheck", "consumer-rules.pro"],
+      "see_also": ["BC-031"],
+      "do_not": [
+        "Do not modify the sample app to scaffold a new app; use the template or the plugin."
+      ],
+      "ai_hint": "For a new app, copy template/ or run createLvglApp; do not duplicate the sample."
+    },
+    {
+      "id": "BC-033",
+      "title": "Kotlin UI builder for app-defined LVGL screens",
+      "decision": "Apps declare their own LVGL screens in Kotlin with the LvglUiScope DSL; the tree is serialised to JSON, pushed through LvglEngine.registerScreen and rendered by lvgl_ui.cpp with the shared Material 3 UI kit. Interactions come back as typed LvglUiEvents, and updateNode() patches a node on the LVGL thread.",
+      "rationale": "The public API was screen-level only: an app could pick one of eight built-in screens but could not build its own UI. A declarative Kotlin DSL makes the framework genuinely usable while reusing the native kit, so there is still one source of truth for widget styling.",
+      "consequences": [
+        "App screen ids start at APP_SCREEN_BASE (1000); 0..7 are the built-in screens.",
+        "The DSL supports column/row/label/button/slider/switch/checkbox/progress/arc/divider/spacer.",
+        "Node ids are auto-assigned (n0, n1, ...) unless the DSL id parameter is used.",
+        "updateNode() marshals to the LVGL thread; the node builder also runs there via launch_screen().",
+        "The native side carries a hand-rolled JSON reader to avoid a JSON dependency."
+      ],
+      "files": [
+        "lvgl-android/src/main/java/com/lvgl/android/ui/LvglUi.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/ui/LvglUiScope.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/ui/LvglNode.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/ui/LvglJson.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/ui/LvglUiEvent.kt",
+        "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        "lvgl-android/src/main/cpp/lvgl_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.cpp",
+        "lvgl-android/src/main/cpp/demo_ui.h",
+        "lvgl-android/src/main/cpp/lvgl_port.cpp",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/ui/LvglUiTest.kt"
+      ],
+      "symbols": ["LvglUi", "LvglUiScope", "LvglNode", "LvglUiEvent", "ui_build_app_screen", "ui_update_node", "registerScreen", "updateNode"],
+      "see_also": ["BC-030", "BC-032"],
+      "do_not": [
+        "Do not build app screens from the UI thread; ui_build_app_screen runs on the LVGL thread.",
+        "Do not use app screen ids below 1000."
+      ],
+      "ai_hint": "For a new screen, register it with LvglUi.registerScreen and show it with setLvglScreen(id)."
+    },
+    {
+      "id": "BC-034",
+      "title": "Standard KDoc tags allowed in the comment schema",
+      "decision": "MachineCommentParser recognises the standard KDoc documentation tags (param, return, property, throws, exception, see, since, deprecated, author, sample, suppress) in addition to the machine tags. They are documentation-only and are never validated as machine annotations.",
+      "rationale": "The KDoc pass added @param/@return tags, which the machine-comment validator rejected as unknown tags. KDoc tags are prose, not key=value annotations, so they belong to documentation rather than the machine schema.",
+      "consequences": [
+        "MachineCommentParser.KNOWN_TAGS = machine tags + KDOC_TAGS.",
+        "AnnotationValidator has no branch for KDoc tags, so they are accepted and ignored.",
+        "docs/agent-comment-schema.md documents the distinction."
+      ],
+      "files": [
+        "lvgl-android/src/test/kotlin/com/lvgl/android/annotations/MachineCommentParser.kt",
+        "docs/agent-comment-schema.md"
+      ],
+      "symbols": ["KDOC_TAGS", "KNOWN_TAGS"],
+      "see_also": ["BC-015"],
+      "do_not": [
+        "Do not use a KDoc tag to carry machine-readable data; add a machine tag instead."
+      ],
+      "ai_hint": "If a new documentation tag is needed, add it to KDOC_TAGS rather than the machine tag list."
+    },
+    {
+      "id": "BC-035",
+      "title": "Google Play compatibility",
+      "decision": "The app targets API 36, ships 64-bit ABIs and an AAB, declares backup/data-extraction rules, opts into predictive back, exposes a locale config, requests only the optional CAMERA permission, and discloses its open-source licences in-app.",
+      "rationale": "Google Play requires a recent target API, 64-bit support, an AAB, runtime permissions, a privacy policy, data-safety disclosure and open-source licence notices.",
+      "consequences": [
+        "PlayComplianceGuardTest machine-checks the target API, ABIs, manifest attributes, permissions, privacy policy and licence screen.",
+        "PRIVACY.md and docs/play-store.md document the privacy policy and the release checklist.",
+        "The CAMERA permission remains optional; the app is fully usable without it."
+      ],
+      "files": [
+        "app/src/main/AndroidManifest.xml",
+        "app/src/main/res/xml/backup_rules.xml",
+        "app/src/main/res/xml/data_extraction_rules.xml",
+        "app/src/main/res/xml/locales_config.xml",
+        "app/src/main/res/values/strings.xml",
+        "app/src/main/java/com/lvgl/sample/LicensesActivity.kt",
+        "PRIVACY.md",
+        "docs/play-store.md",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/PlayComplianceGuardTest.kt"
+      ],
+      "symbols": ["PlayComplianceGuardTest", "LicensesActivity", "PRIVACY.md", "play-store.md"],
+      "see_also": ["BC-032", "BC-033"],
+      "do_not": [
+        "Do not add a permission without a Play policy justification.",
+        "Do not remove the licence disclosure or the privacy policy."
+      ],
+      "ai_hint": "Run PlayComplianceGuardTest before a release; it fails the build on a Play regression."
     }
   ]
 }

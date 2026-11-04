@@ -23,7 +23,7 @@ param(
 )
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
-if (-not $ApkPath) { $ApkPath = Join-Path $RepoRoot "app/build/outputs/apk/debug/app-debug.apk" }
+if (-not $ApkPath) { $ApkPath = Join-Path $RepoRoot "app/build/outputs/apk/debug/app-universal-debug.apk" }
 $ScreenshotDir = Join-Path $RepoRoot $ScreenshotDir
 
 $isWindows = ($IsWindows -or ($env:OS -eq "Windows_NT"))
@@ -50,6 +50,12 @@ Push-Location $RepoRoot
 try {
     Invoke-Native { & $gradlew assembleDebug --no-daemon 2>&1 | Out-Null }
 } finally { Pop-Location }
+# ABI splits: prefer the universal APK, but accept any debug APK.
+if (-not (Test-Path $ApkPath)) {
+    $found = Get-ChildItem (Split-Path $ApkPath -Parent) -Filter *.apk -ErrorAction SilentlyContinue |
+        Sort-Object Length -Descending | Select-Object -First 1
+    if ($found) { $ApkPath = $found.FullName }
+}
 if (-not (Test-Path $ApkPath)) { throw "APK not produced: $ApkPath" }
 
 # --- Ensure emulator ---
@@ -91,7 +97,8 @@ $activities = @(
     "com.lvgl.sample/.CameraSampleActivity",
     "com.lvgl.sample/.GameSampleActivity",
     "com.lvgl.sample/.LauncherSampleActivity",
-    "com.lvgl.sample/.showcase.DemoShowcaseActivity"
+    "com.lvgl.sample/.showcase.DemoShowcaseActivity",
+    "com.lvgl.sample/.AppDemoActivity"
 )
 foreach ($a in $activities) { Start-Activity $a }
 
@@ -112,6 +119,14 @@ if ($log -match "FATAL|SIGSEGV|JNI DETECTED ERROR|start timeout|ANR in com\.lvgl
 }
 if ($log -notmatch "LVGL initialised") { Fail "LVGL did not initialise" }
 if ($log -notmatch "Showcase built: 4 tiles") { Fail "Showcase screen did not build its tiles" }
+
+# Layout lint: every screen reports overlaps/out-of-bounds/clipped text with
+# this tag after its first refresh. Any warning fails the walk.
+$lint = Invoke-Native { & $adb logcat -d -s LVGLLayout 2>&1 }
+if ("$lint" -match "LVGLLayout") {
+    $lint.ToString().Split("`n") | Select-Object -First 12 | ForEach-Object { Write-Host "  $_" }
+    Fail "Layout lint reported issues (see LVGLLayout above)"
+}
 
 if ($Script:Failures.Count -gt 0) {
     Write-Host "`n==> DYNAMIC TEST FAILED ($($Script:Failures.Count) failures)" -ForegroundColor Red

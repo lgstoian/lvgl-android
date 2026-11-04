@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 LVGL Android Framework Contributors
+  SPDX-License-Identifier: MIT
+
+  This file is part of the LVGL Android Framework.
+  See LICENSE in the project root for full license information.
+-->
+<resources>
+    <!-- AppCompat DayNight theme with no action bar; LvglActivity draws the
+         LVGL status bar itself and runs immersive. -->
+    <style name="Theme.LvglApp" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>

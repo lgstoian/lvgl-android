@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 LVGL Android Framework Contributors
+  SPDX-License-Identifier: MIT
+
+  This file is part of the LVGL Android Framework.
+  See LICENSE in the project root for full license information.
+-->
+<resources>
+    <string name="app_name">LVGL App</string>
+</resources>

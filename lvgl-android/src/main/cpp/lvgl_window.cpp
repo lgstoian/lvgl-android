@@ -6,6 +6,8 @@
  */
 #include "lvgl_window.h"
 
+#include "demo_ui.h"
+
 #include <android/log.h>
 #include <cmath>
 
@@ -55,8 +57,10 @@ void Window::create(lv_obj_t* parent, const Config& config) {
     lv_obj_add_flag(bg_close_, LV_OBJ_FLAG_FLOATING);
     lv_obj_set_size(bg_close_, 2000, 2000);   /* oversized to cover screen */
     lv_obj_center(bg_close_);
-    lv_obj_set_style_bg_color(bg_close_, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(bg_close_, lv_pct(40), 0);
+    lv_obj_set_style_bg_color(bg_close_, lv_color_hex(0x0B0E16), 0);
+    /* Fully opaque scrim: a translucent backdrop let the launcher tiles show
+     * through around the window, which read as overlap. */
+    lv_obj_set_style_bg_opa(bg_close_, LV_OPA_COVER, 0);
     lv_obj_clear_flag(bg_close_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(bg_close_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(bg_close_, win_close_on_click, LV_EVENT_CLICKED, this);
@@ -70,11 +74,11 @@ void Window::create(lv_obj_t* parent, const Config& config) {
     lv_obj_set_style_radius(container_, config.radius, 0);
     lv_obj_set_style_bg_color(container_, lv_color_hex(config.bg_color), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(container_, 2, 0);
+    lv_obj_set_style_border_width(container_, ui_dpx(1, ui_dpi()), 0);
     lv_obj_set_style_border_color(container_, lv_color_hex(config.border_color), 0);
-    lv_obj_set_style_shadow_width(container_, 32, 0);
-    lv_obj_set_style_shadow_opa(container_, lv_pct(35), 0);
-    lv_obj_set_style_shadow_offset_y(container_, 10, 0);
+    lv_obj_set_style_shadow_width(container_, ui_dpx(12, ui_dpi()), 0);
+    lv_obj_set_style_shadow_opa(container_, LV_OPA_30, 0);
+    lv_obj_set_style_shadow_offset_y(container_, ui_dpx(4, ui_dpi()), 0);
     lv_obj_set_style_pad_all(container_, 0, 0);
     lv_obj_clear_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
     /* Flex column: header on top, content fills the rest. */
@@ -97,16 +101,16 @@ void Window::create(lv_obj_t* parent, const Config& config) {
     lv_obj_set_style_bg_opa(header_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(header_, 0, 0);
     lv_obj_set_style_pad_all(header_, 0, 0);
-    lv_obj_set_style_pad_ver(header_, 16, 0);
-    lv_obj_set_style_pad_left(header_, 28, 0);
-    lv_obj_set_style_pad_right(header_, 28, 0);
+    lv_obj_set_style_pad_ver(header_, ui_dpx(8, ui_dpi()), 0);
+    lv_obj_set_style_pad_left(header_, ui_dpx(16, ui_dpi()), 0);
+    lv_obj_set_style_pad_right(header_, ui_dpx(8, ui_dpi()), 0);
     lv_obj_clear_flag(header_, LV_OBJ_FLAG_CLICKABLE);
 
     if (config.title && config.title[0]) {
         title_lbl_ = lv_label_create(header_);
         lv_label_set_text(title_lbl_, config.title);
         lv_obj_set_style_text_color(title_lbl_, lv_color_hex(config.title_color), 0);
-        lv_obj_set_style_text_font(title_lbl_, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(title_lbl_, ui_font(ui_tokens().f_subtitle, ui_dpi()), 0);
         lv_obj_set_flex_grow(title_lbl_, 1);
         /* Decorative: never intercept taps meant for the header/window. */
         lv_obj_clear_flag(title_lbl_, LV_OBJ_FLAG_CLICKABLE);
@@ -115,7 +119,7 @@ void Window::create(lv_obj_t* parent, const Config& config) {
 
     /* Close hit area (top-right, inside the header row). */
     close_btn_ = lv_obj_create(header_);
-    lv_obj_set_size(close_btn_, 64, 64);
+    lv_obj_set_size(close_btn_, ui_dpx(36, ui_dpi()), ui_dpx(36, ui_dpi()));
     lv_obj_set_style_bg_opa(close_btn_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(close_btn_, 0, 0);
     lv_obj_clear_flag(close_btn_, LV_OBJ_FLAG_SCROLLABLE);
@@ -128,11 +132,14 @@ void Window::create(lv_obj_t* parent, const Config& config) {
     lv_obj_set_flex_grow(content_, 1);
     lv_obj_set_style_bg_opa(content_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(content_, 0, 0);
-    lv_obj_set_style_pad_all(content_, 28, 0);
+    lv_obj_set_style_pad_all(content_, ui_dpx(16, ui_dpi()), 0);
     lv_obj_set_layout(content_, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(content_, LV_FLEX_FLOW_COLUMN);
+    /* Top-aligned with a consistent gap: centering left a large empty area
+     * above the first child and made tall content overflow the window. */
     lv_obj_set_flex_align(content_, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(content_, ui_dpx(12, ui_dpi()), 0);
     lv_obj_clear_flag(content_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(content_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(content_, win_stop_propagate, LV_EVENT_ALL, this);
@@ -180,7 +187,9 @@ void Window::apply_anim_values() {
     lv_obj_set_pos(container_, ix, iy);
     lv_obj_set_size(container_, iw, ih);
     lv_obj_set_style_opa(container_, io, 0);
-    if (bg_close_) lv_obj_set_style_opa(bg_close_, (int32_t)(io * 0.4f), 0);
+    /* The scrim tracks the window opacity but stays fully opaque, so the
+     * launcher tiles behind it never show through. */
+    if (bg_close_) lv_obj_set_style_opa(bg_close_, io, 0);
 }
 
 void Window::tick(float dt) {

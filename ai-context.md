@@ -397,3 +397,334 @@ most packages.
 
 **Fix**: Added `<queries><intent><action android:name="android.intent.action.MAIN"/>`
 to `app/src/main/AndroidManifest.xml`. The launcher now lists 131 apps.
+
+## M5Tab5 Dashboard Session (2026-11-03)
+
+These were discovered while replacing the list menu with an M5Tab5-style device
+dashboard (a full-screen Android schematic plus floating control panels).
+
+### `lv_line_set_points()` Keeps the Point Pointer
+
+**Problem**: Bus lines in the schematic were invisible.
+
+**Root Cause**: `lv_line_set_points()` stores the caller's `lv_point_precise_t`
+array instead of copying it. Passing a stack array left a dangling pointer, so
+the widget drew garbage and self-sized to nothing.
+
+**Fix**: Static per-bus point storage (`s_bus_points`) that outlives the lines.
+
+**Note**: The line's self-size is `max(points.x), max(points.y)`, not a bounding
+box; position the line at (0,0) and use parent coordinates.
+
+### Short Taps Are Dropped Between LVGL Polls
+
+**Problem**: `adb shell input tap` produced no click on some screens; a 200 ms
+press always worked.
+
+**Root Cause**: LVGL polls the input device once per rendered frame. With
+software GL the emulator renders at ~3 fps, so a 2 ms DOWN/UP pair can land
+entirely between two polls and was seen only as RELEASED.
+
+**Fix**: `touch_read_cb` holds PRESSED until LVGL has polled the press once
+(`touchPressSeen`, cleared on ACTION_DOWN). See BC-024.
+
+**Note**: `adb shell input tap` emits DOWN and UP ~2 ms apart — always use a
+slow `input swipe X Y X Y 200` when testing taps by hand.
+
+### Navigator Lost After Returning From a Child Activity
+
+**Problem**: After BACK from a sample, dashboard taps did nothing
+(`drainNav id=N valid=0`).
+
+**Root Cause**: A destroyed child activity sets the engine's navigator to null.
+`onCreate` only re-registered it, and the parent's `onResume` runs *before* the
+child's `onDestroy`, so an unconditional clear wiped the restored bridge.
+
+**Fix**: `LvglActivity` stores its navigator in a field, re-registers it in
+`onResume` when it differs, and clears it in `onDestroy` only if it is still
+this activity's. See BC-025.
+
+### Window Brightness Must Be Posted to the UI Thread
+
+**Problem**: The LCD panel updated but the screen never dimmed.
+
+**Root Cause**: Native calls `setBrightness` on the LVGL thread;
+`WindowManager.LayoutParams.screenBrightness` triggers `View.requestLayout()`,
+which throws `CalledFromWrongThreadException` (silently cleared by JNI).
+
+**Fix**: `window.decorView.post { ... }` in `LvglActivity.setBrightness`.
+
+**Note**: The emulator ignores brightness, so verify via logcat
+(`LvglSystemControl: applyBrightness=...`), not screenshots.
+
+### Clock Timer / Status Labels Must Be Torn Down on Every Screen Switch
+
+**Problem**: After visiting the showcase, LVGL logged
+`lv_obj_get_display: No screen found` repeatedly.
+
+**Root Cause**: The showcase bypasses `make_screen()`, so the dashboard's clock
+timer and RTC labels survived `lv_obj_clean()` and the timer kept touching freed
+labels.
+
+**Fix**: `launch_screen()` deletes `g_clock_timer` and clears every status-bar
+label pointer before invoking the builder. It is the single entry point for all
+screens. See BC-022.
+
+### Emulator Renders at ~3 fps With SwiftShader
+
+**Fact**: A 1080x2340 DIRECT-mode framebuffer with a per-pixel R/B swap is
+expensive under `swiftshader_indirect`; frame times of 200-500 ms are normal.
+
+**Consequences**:
+- Animations and spring physics run slowly but remain frame-rate independent.
+- Input polling is coarse; see the short-tap fix above.
+- Do not mistake slow frames for an ANR.
+
+## Beautiful-by-Default Session (2026-11-04)
+
+### Empty `LV_SIZE_CONTENT` Containers in a Flex Row Become 480x480
+
+**Problem**: The status-bar zones were reported as 480x480 squares by the layout
+lint, and spacers stretched to 480 px tall.
+
+**Root Cause**: A plain `lv_obj` with no content and `LV_SIZE_CONTENT` in a flex
+row resolves its cross size to a 480 px default (`LV_DPI_DEF`) instead of 0.
+
+**Fix**: Give such objects an explicit height (spacers use 1 px).
+
+**Note**: Widgets (`lv_label`, `lv_button`, ...) compute their own self size and
+are unaffected. Only empty plain containers are.
+
+### Layout Lint Must Run After the First Refresh
+
+**Problem**: `ui_layout_check()` reported garbage rectangles when called
+immediately after building a screen.
+
+**Root Cause**: LVGL computes object coordinates during the refresh; before the
+first refresh `coords` is uninitialised.
+
+**Fix**: `launch_screen` schedules a one-shot 500 ms timer that runs
+`ui_layout_report()` after the first frame. Rectangles that fail a sanity check
+are ignored.
+
+### Layout Lint
+
+- Tag: `LVGLLayout` (WARN) in debug builds.
+- Report: `LvglEngine.dumpLayoutReport()` returns JSON
+  (`{"issues":[{"type":"overlap|bounds|text",...}]}`).
+- Detection: `ui_layout_check()` walks the tree and reports overlapping
+  siblings (only for flex-laid parents), children outside their parent, and
+  labels whose text overflows in `LV_LABEL_LONG_MODE_CLIP`.
+- Overlays (`LV_OBJ_FLAG_FLOATING` / `IGNORE_LAYOUT`) are ignored by design.
+- CI: `tools/dynamic-test.ps1` fails when any `LVGLLayout` warning appears.
+- Validation logic lives in `LayoutLintRules` with canaries in
+  `LayoutLintGuardTest` (BC-027).
+
+## Device-Aware Dashboard Session (2026-11-04)
+
+### Window Backdrop Opacity Was Overridden Per Frame
+
+**Problem**: The showcase window's scrim stayed translucent; the launcher tiles
+showed through around the window.
+
+**Root Cause**: `Window::apply_anim_values()` set the backdrop opacity to
+`window_opa * 0.4f` every frame, overriding the style.
+
+**Fix**: The scrim now uses the window's own opacity (`LV_OPA_COVER`), so it is
+fully opaque once the window is open.
+
+### Flex Column Spread Two Labels to the Chip Edges
+
+**Problem**: Chip name/sub-labels were pushed to the top and bottom edges of
+their chip and clipped by 1-2 px.
+
+**Root Cause**: A flex column distributes its children across the track; with
+two content-sized labels the gap between them grew to fill the chip.
+
+**Fix**: Map chips no longer use a flex column. The two labels are positioned
+explicitly and centred as a block (`draw_map_chip()`).
+
+### Device Info Reaches Native Through the Engine
+
+**Facts**:
+- `LvglDeviceInfo.collect(context)` reads `Build`, `ActivityManager.MemoryInfo`,
+  `StatFs`, `DisplayMetrics`, `CameraManager` and `SensorManager`.
+- `LvglActivity.pushDeviceInfo()` runs in `onCreate` before the dashboard is
+  requested.
+- `nativeSetDeviceInfo` copies the JNI strings into engine-owned storage (plain
+  string copy, no LVGL objects, so it is safe from the UI thread).
+- `rebuild_screen()` copies the engine strings onto the LVGL thread and calls
+  `ui_set_device_info()` before building, so the first build already has them.
+- `socMarketingName()` maps platform ids to marketing names; unknown ids fall
+  back to a title-cased raw value, and `ranchu`/`goldfish` map to "Virtual SoC".
+
+## Material Kit, Size and Toolkit Session (2026-11-04)
+
+### Fixed-width Status-Bar Labels Can Overflow the Screen
+
+**Problem**: The layout lint reported `child outside parent` for the battery
+labels; the right edge of the status bar was clipped.
+
+**Root Cause**: The status bar is a flex row of fixed-width labels. When the sum
+of the fixed widths, `pad_column` gaps and `pad_left/right` exceeds the screen
+width, the growing spacers collapse to zero and the last children overflow.
+
+**Fix**: Keep the total fixed width under the screen width — the title is 80 dp
+with an explicit height, `pad_column` is `g_tx.sm` (8 dp), and the date/clock
+labels are sized to a sample string.
+
+**Note**: The status bar is 52 dp tall; the title label needs an explicit height
+(see below).
+
+### `LV_LABEL_LONG_MODE_DOTS` Wraps Unless the Label Has a Fixed Height
+
+**Problem**: The device-model title wrapped to two lines instead of truncating
+with dots.
+
+**Root Cause**: DOTS mode wraps the text into the label's height and only adds
+dots to the last line. With `LV_SIZE_CONTENT` height the label grows to fit two
+lines, so nothing is truncated.
+
+**Fix**: Set an explicit single-line height (e.g. `ui_dpx(24, dpi)`) on labels
+that must truncate with dots. `ui_fit_label()` is the alternative for shrinking
+text instead.
+
+### Library `isMinifyEnabled = true` Breaks `lintVitalRelease`
+
+**Problem**: `assembleRelease` failed with `MainActivity must extend
+android.app.Activity [Instantiatable]` for every activity, although the classes
+were kept by the consumer ProGuard rules.
+
+**Root Cause**: With the **library** module's `isMinifyEnabled = true`, lint's
+release-vital class model cannot resolve the activity superclass that lives in
+the library. `lintDebug` passes; only `lintVitalRelease` fails.
+
+**Fix**: Keep `isMinifyEnabled = false` on the library module. Libraries are not
+minified in place — the consumer app's R8 pass tree-shakes the whole graph. See
+BC-031.
+
+### Static C++ STL Removes `libc++_shared.so`
+
+**Fact**: `ANDROID_STL=c++_static` links the STL into `liblvgl_android.so`, so the
+per-ABI APK no longer ships a separate `libc++_shared.so` (~1.3 MB). The main
+`.so` grows slightly, but the APK shrinks overall.
+
+**Note**: The app has no other native code, so there is no STL symbol conflict.
+
+### `useLegacyPackaging = true` Trades Install Size for APK Size
+
+**Fact**: Compressing the native libraries inside the APK (`useLegacyPackaging =
+true`) reduces the download size (the APK is zipped) at the cost of a larger
+installed footprint, because Android extracts the libraries on install.
+
+### Build Artifacts Were Tracked in Git
+
+**Problem**: `app/build/`, `lvgl-android/build/`, `.gradle/` and `.cxx/` were
+committed, inflating the repository and producing noisy diffs.
+
+**Fix**: `.gitignore` now covers them and `git rm -r --cached` removed them from
+the index. The files remain on disk.
+
+### The Template Uses a Composite Build
+
+**Fact**: `template/` is a standalone Gradle project that `includeBuild`s the
+framework repository root and substitutes
+`com.lvgl.android:lvgl-android` with `:lvgl-android`. The library module declares
+`group = "com.lvgl.android"` and `version` from `gradle.properties`, so the
+substitution resolves. Copy the Gradle wrapper from the framework repo into a
+copied template.
+
+## Kotlin UI Builder Session (2026-11-04)
+
+### App Screen Ids Must Be >= 1000
+
+**Problem**: `LvglUi.registerScreen(1000, ...)` followed by `setLvglScreen(1000)` showed the dashboard instead of the app screen.
+
+**Root Cause**: `nativeSetScreen` rejected any id outside `0..7` (`if (screenId < 0 || screenId >= SCREEN_COUNT) return;`).
+
+**Fix**: accept ids `>= APP_SCREEN_BASE` (1000); `launch_screen` dispatches those to `ui_build_app_screen`. See BC-033.
+
+### Node Callbacks Do Not Cross JNI
+
+**Problem**: `LvglUi.listener` was set, but the `onClick`/`onChange` lambdas in the DSL never fired.
+
+**Root Cause**: only the serialised tree crosses JNI; the Kotlin lambdas stay in Kotlin. The native side reports a node id and an event type, and `LvglUi` must dispatch that to the callback captured at registration time.
+
+**Fix**: `registerScreen` builds a `nodeId -> handler` map from the assigned tree; `receiver` invokes it before the screen-level listener.
+
+### The Receiver Must Be Installed Independently of the Listener
+
+**Problem**: no events arrived when an app used only node callbacks and never set `LvglUi.listener`.
+
+**Root Cause**: the native listener was only installed when `listener` was set.
+
+**Fix**: `registerScreen` always sets `LvglEngine.instance.uiEventListener = receiver`.
+
+### LVGL Returns the Topmost Object, Clickable or Not
+
+**Fact**: `lv_indev_search_obj` returns the deepest object under the point whose hit test passes, regardless of `LV_OBJ_FLAG_CLICKABLE`. For a "tap anywhere" surface, attach the handler to an object that actually receives the press (a button, or an explicitly clickable container) and hit-test manually.
+
+### The Game Target Is a Button
+
+**Decision**: the tap-the-target demo uses a `lv_button` as the target so LVGL's normal click path applies. A plain `lv_obj` child of a non-clickable container did not receive `LV_EVENT_PRESSED` reliably.
+
+### Screenshot Coordinates Are Not Input Coordinates
+
+**Trap**: screenshots rendered in the review pane are scaled, so coordinates read from them miss the target. Use `adb shell input tap` with the physical resolution (`adb shell wm size`) and verify with a log of the indev point.
+
+## Showcase Window & Launcher Session (2026-11-04)
+
+### Window Content Was Vertically Centred
+
+**Problem**: the showcase windows showed a large empty gap between the header title and the content, and tall content could overflow the window.
+
+**Root Cause**: `Window::create` set the content's main-axis alignment to `LV_FLEX_ALIGN_CENTER`.
+
+**Fix**: top-align the content (`LV_FLEX_ALIGN_START`) and add a consistent 12 dp `pad_row`.
+
+### Gauge Columns Overlapped
+
+**Problem**: the layout lint reported overlapping siblings in the System window; the two gauge columns were wider than half the window.
+
+**Root Cause**: the columns were content-sized and inherited theme padding, so two 174 dp columns exceeded the window width.
+
+**Fix**: `lv_obj_set_flex_grow(col, 1)` + `pad_all(0)` and a 132 dp arc.
+
+### Sensor Names Sat on the Bars
+
+**Problem**: the Sensors window drew the sensor names on top of the progress bars.
+
+**Root Cause**: the bar had a fixed 260 dp width; together with the name it exceeded the row width, so the flex layout overlapped them.
+
+**Fix**: the bar grows to fill the row (`flex_grow(1)`) and the name takes its natural width.
+
+### The Launcher Grid Cell Size Was Unreliable
+
+**Problem**: `ui_make_grid` produced cells larger than the requested size and the layout lint reported children outside the parent.
+
+**Fix**: the launcher uses a plain column of full-width rows, which is robust at any density and width.
+
+### Arc Gauges Must Not Be Clipped
+
+**Problem**: the showcase gauges were cropped at the top and sides.
+
+**Root Cause**: an arc's stroke is centred on its radius (`min(w,h)/2`), so it extends past the widget bounds; in the old layout the column also had theme padding that made the arc larger than its container.
+
+**Fix**: the gauge columns use `flex_grow(1)` with `pad_all(0)`, the arcs are 132 dp, and the columns set `LV_OBJ_FLAG_OVERFLOW_VISIBLE` so the stroke is never clipped.
+
+### Google Play Compliance (2026-11-04)
+
+**Requirements enforced by `PlayComplianceGuardTest`** (see `docs/play-store.md`):
+
+- `targetSdk >= 36` (the Play requirement from 31 August 2026).
+- `arm64-v8a` is present (64-bit requirement).
+- The manifest declares `dataExtractionRules`, `fullBackupContent`,
+  `enableOnBackInvokedCallback`, `resizeableActivity` and `localeConfig`.
+- Only the optional `CAMERA` permission is requested.
+- `PRIVACY.md`, `docs/play-store.md`, `backup_rules.xml`,
+  `data_extraction_rules.xml`, `locales_config.xml` and the licence screen exist.
+
+**Trap**: adding a permission makes `PlayComplianceGuardTest` fail — Play
+requires a policy justification for every permission.
+
+

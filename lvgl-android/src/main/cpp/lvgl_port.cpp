@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026 LVGL Android Framework Contributors
  * SPDX-License-Identifier: MIT
  *
@@ -27,6 +27,7 @@
  * @breadcrumb BC-008
  * @breadcrumb BC-009
  * @breadcrumb BC-012
+ * @breadcrumb BC-031
  * @decision ADR-008
  * @invariant engine->running == false implies the render thread is joined
  * @trap Never call scheduleTask() while holding engine->mutex (deadlock/ANR).
@@ -73,6 +74,9 @@ extern "C" {
 static bool nav_valid();
 static void nav_to(int screenId);
 static void nav_back();
+static void sys_set_brightness(int percent);
+static void sys_set_volume(int percent);
+static void toggle_dark_mode();
 }
 
 
@@ -106,6 +110,11 @@ struct Engine {
     lv_indev_state_t touchState = LV_INDEV_STATE_RELEASED;
     lv_point_t touchPoint = {0, 0};
     bool touchNew = false;
+    /* LVGL polls the input device once per rendered frame. On a slow frame
+     * (software GL can drop to a few fps) a short tap can fall entirely
+     * between two polls, so the press is held until LVGL has observed it.
+     * @breadcrumb BC-024 */
+    bool touchPressSeen = false;
 
     lv_display_t* display = nullptr;
     lv_indev_t* indev = nullptr;
@@ -117,9 +126,9 @@ struct Engine {
     uint32_t fbStride = 0;
 
     /* The screen requested via nativeSetScreen before the display existed. */
-    int pendingScreenId = SCREEN_MENU;
+    int pendingScreenId = SCREEN_HOME;
     /* The screen currently shown — survives surface recreation. */
-    int currentScreenId = SCREEN_MENU;
+    int currentScreenId = SCREEN_HOME;
 
     /* Cached theme; applied after every screen build and on config change. */
     UiTheme theme;
@@ -128,6 +137,16 @@ struct Engine {
      * by rebuild_screen() so an onResume rebuild never wipes live status. */
     std::string lastStatusText;
     int lastStatusScreen = -1;
+
+    /* Battery level (0..100, -1 = unknown) for the dashboard status bar. */
+    int  batteryLevel = -1;
+    bool batteryCharging = false;
+
+    /* Real device facts for the dashboard device map (manufacturer, model, SoC,
+     * memory, storage, display, android version, cameras, sensors). Written
+     * from the UI thread, copied onto the LVGL thread by rebuild_screen(). */
+    std::mutex deviceInfoMutex;
+    std::string devInfo[9];
 
     /* Safe-area insets (px) from Android; the UI kit pads against them. */
     uint32_t insetTop = 0;
@@ -225,6 +244,15 @@ static void touch_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     std::lock_guard<std::mutex> lock(engine->touchMutex);
     data->state = engine->touchState;
     data->point = engine->touchPoint;
+    /* Hold a short press until LVGL has polled it once. Without this, a tap
+     * whose DOWN/UP pair lands between two polls (easy at a few fps) is never
+     * seen as pressed and produces no click. */
+    if (data->state == LV_INDEV_STATE_RELEASED && !engine->touchPressSeen) {
+        data->state = LV_INDEV_STATE_PRESSED;
+    }
+    if (data->state == LV_INDEV_STATE_PRESSED) {
+        engine->touchPressSeen = true;
+    }
     engine->touchNew = false;
 }
 
@@ -290,6 +318,23 @@ static void rebuild_screen(Engine* engine, int screen_id) {
         dpi = engine->dpi;
         status_text = engine->lastStatusText;
         status_screen = engine->lastStatusScreen;
+    }
+    /* Push the real device facts onto the LVGL thread before the build. */
+    {
+        UiDeviceInfo info;
+        {
+            std::lock_guard<std::mutex> lk(engine->deviceInfoMutex);
+            info.manufacturer    = engine->devInfo[0].c_str();
+            info.model           = engine->devInfo[1].c_str();
+            info.soc             = engine->devInfo[2].c_str();
+            info.memory          = engine->devInfo[3].c_str();
+            info.storage         = engine->devInfo[4].c_str();
+            info.display         = engine->devInfo[5].c_str();
+            info.android_version = engine->devInfo[6].c_str();
+            info.cameras         = engine->devInfo[7].c_str();
+            info.sensors         = engine->devInfo[8].c_str();
+        }
+        ui_set_device_info(info);
     }
     /* launch_screen() (demo_ui.cpp) cleans + builds the requested screen. */
     launch_screen(screen_id, dpi, theme);
@@ -477,6 +522,11 @@ static JavaVM* g_vm = nullptr;
 static jobject g_navRef = nullptr;          // global ref to Kotlin ScreenNavigator
 static jmethodID g_midNavTo = nullptr;       // navigateTo(int)
 static jmethodID g_midNavBack = nullptr;     // navigateBack()
+/* Optional system-control methods (dashboard backlight / volume panels).
+ * Resolved only when the registered navigator implements them. */
+static jmethodID g_midSetBrightness = nullptr;   // setBrightness(float)
+static jmethodID g_midSetVolume = nullptr;       // setVolumePercent(int)
+static jmethodID g_midToggleDarkMode = nullptr;  // toggleDarkMode()
 
 static JNIEnv* jniEnv() {
     JNIEnv* env = nullptr;
@@ -510,14 +560,18 @@ JNIEXPORT jlong JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeCreate(JNIEnv* /*env*/, jobject /*thiz*/) {
     auto* engine = new Engine();
     /* Wire navigation hooks so LVGL event callbacks can request screen
-     * switches / back presses from native code. */
+     * switches / back presses from native code. The system hooks drive the
+     * dashboard's backlight / volume panels (see BC-023). */
     ui_set_nav_hooks(nav_to_hook, nav_back_hook);
+    ui_set_system_hooks(sys_set_brightness, sys_set_volume);
+    ui_set_theme_hook(toggle_dark_mode);
     LOGI("Engine created");
     return reinterpret_cast<jlong>(engine);
 }
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeDestroy(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeDestroy(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
 
@@ -542,6 +596,8 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDestroy(JNIEnv* /*env*/, jobject /
     }
     g_midNavTo = nullptr;
     g_midNavBack = nullptr;
+    g_midSetBrightness = nullptr;
+    g_midSetVolume = nullptr;
     lv_deinit();
     delete engine;
     LOGI("Engine destroyed");
@@ -551,6 +607,7 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDestroy(JNIEnv* /*env*/, jobject /
 
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /*thiz*/,
+                                                         
                                                            jlong handle, jobject surface,
                                                            jint width, jint height, jint dpi) {
     auto* engine = fromHandle(handle);
@@ -659,7 +716,8 @@ static void scheduleTask(Engine* engine, std::function<void()> task) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
     LOGI("nativeDeinitDisplay");
@@ -677,7 +735,8 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, job
 /* ---- Pause / resume ------------------------------------------------------ */
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeResume(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeResume(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
     engine->paused = false;
@@ -686,7 +745,8 @@ Java_com_lvgl_android_engine_LvglEngine_nativeResume(JNIEnv* /*env*/, jobject /*
 }
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativePause(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativePause(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
     engine->paused = true;
@@ -697,6 +757,7 @@ Java_com_lvgl_android_engine_LvglEngine_nativePause(JNIEnv* /*env*/, jobject /*t
 
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeTouchEvent(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                         
                                                           jlong handle, jint action, jfloat x, jfloat y) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
@@ -706,16 +767,19 @@ Java_com_lvgl_android_engine_LvglEngine_nativeTouchEvent(JNIEnv* /*env*/, jobjec
     engine->touchPoint.x = static_cast<lv_coord_t>(x);
     engine->touchPoint.y = static_cast<lv_coord_t>(y);
     engine->touchNew = true;
+    if (action == 0) engine->touchPressSeen = false;
 }
 
 /* ---- Screen / status / theme -------------------------------------------- */
 
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeSetScreen(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                         
                                                          jlong handle, jint screenId) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
-    if (screenId < 0 || screenId >= SCREEN_COUNT) return;
+    /* Built-in screens are 0..7; app-defined screens start at APP_SCREEN_BASE. */
+    if (screenId < 0 || (screenId >= SCREEN_COUNT && screenId < APP_SCREEN_BASE)) return;
     LOGI("nativeSetScreen: %d", screenId);
 
     /* NOTE: never call scheduleTask() while holding engine->mutex — it locks
@@ -737,6 +801,7 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetScreen(JNIEnv* /*env*/, jobject
 
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeSetStatusText(JNIEnv* env, jobject /*thiz*/,
+                                                         
                                                              jlong handle, jstring text) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
@@ -770,17 +835,40 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetStatusText(JNIEnv* env, jobject
 }
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* /*env*/, jobject /*thiz*/,
-                                                          jlong handle, jboolean darkMode,
-                                                          jint primary, jint secondary) {
+Java_com_lvgl_android_engine_LvglEngine_nativeSetBatteryLevel(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                              jlong handle, jint level,
+                                                              jboolean charging) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    scheduleTask(engine, [engine, level, charging]() {
+        if (!engine->display) return;
+        ui_set_battery_level(static_cast<int>(level), charging);
+    });
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* env, jobject /*thiz*/,
+                                                         jlong handle, jboolean darkMode,
+                                                          jintArray palette) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
 
     UiTheme theme;
     theme.dark_mode = static_cast<bool>(darkMode);
-    theme.primary   = static_cast<int>(primary);
-    theme.secondary = static_cast<int>(secondary);
     theme.applied   = true;
+
+    /* Copy the Material 3 tonal roles; missing entries keep their defaults. */
+    if (palette) {
+        jsize n = env->GetArrayLength(palette);
+        if (n > MATERIAL_ROLE_COUNT) n = MATERIAL_ROLE_COUNT;
+        jint tmp[MATERIAL_ROLE_COUNT] = {0};
+        env->GetIntArrayRegion(palette, 0, n, tmp);
+        for (int i = 0; i < n; i++) {
+            theme.roles[i] = static_cast<int>(tmp[i]);
+        }
+    }
+    theme.primary   = theme.roles[MATERIAL_PRIMARY];
+    theme.secondary = theme.roles[MATERIAL_SECONDARY];
 
     /* Never scheduleTask() under engine->mutex (deadlock — see nativeSetScreen). */
     bool changed;
@@ -809,13 +897,15 @@ Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* /*env*/, jobjec
 /* ---- Introspection (used by tests) -------------------------------------- */
 
 JNIEXPORT jboolean JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeIsDisplayReady(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeIsDisplayReady(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     return engine && engine->initialized && engine->display;
 }
 
 JNIEXPORT jint JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeGetScreen(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeGetScreen(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return -1;
     std::lock_guard<std::mutex> lock(engine->stateMutex);
@@ -823,7 +913,8 @@ Java_com_lvgl_android_engine_LvglEngine_nativeGetScreen(JNIEnv* /*env*/, jobject
 }
 
 JNIEXPORT jintArray JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeCaptureFrame(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeCaptureFrame(JNIEnv* env, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine || !engine->initialized || !engine->fb1) return nullptr;
     std::lock_guard<std::mutex> lock(engine->mutex);
@@ -846,10 +937,65 @@ Java_com_lvgl_android_engine_LvglEngine_nativeCaptureFrame(JNIEnv* env, jobject 
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeGetLastError(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+Java_com_lvgl_android_engine_LvglEngine_nativeGetLastError(JNIEnv* env, jobject /*thiz*/,
+                                                          jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return env->NewStringUTF("");
     return env->NewStringUTF(engine->lastError);
+}
+
+/* Dump the current screen's layout lint as JSON. The walk must happen on the
+ * LVGL thread, so the request is queued and the caller waits for the result. */
+JNIEXPORT jstring JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeDumpLayoutReport(JNIEnv* env, jobject /*thiz*/,
+                                                               jlong handle) {
+    auto* engine = fromHandle(handle);
+    if (!engine || !engine->display) return env->NewStringUTF("{\"issues\":[]}");
+
+    std::mutex m;
+    std::condition_variable cv;
+    bool done = false;
+    std::string result;
+    scheduleTask(engine, [&]() {
+        char buf[2048];
+        ui_layout_report_json(lv_screen_active(), buf, sizeof(buf));
+        result = buf;
+        {
+            std::lock_guard<std::mutex> lk(m);
+            done = true;
+        }
+        cv.notify_all();
+    });
+    std::unique_lock<std::mutex> lk(m);
+    cv.wait_for(lk, std::chrono::seconds(2), [&] { return done; });
+    return env->NewStringUTF(result.c_str());
+}
+
+/* Store the real device facts for the dashboard device map. Plain string copy:
+ * no LVGL objects are touched here, so it is safe from the UI thread. */
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeSetDeviceInfo(JNIEnv* env, jobject /*thiz*/,
+                                                            jlong handle,
+                                                            jstring manufacturer,
+                                                            jstring model,
+                                                            jstring soc,
+                                                            jstring memory,
+                                                            jstring storage,
+                                                            jstring display,
+                                                            jstring androidVersion,
+                                                            jstring cameras,
+                                                            jstring sensors) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+
+    jstring fields[9] = { manufacturer, model, soc, memory, storage, display,
+                          androidVersion, cameras, sensors };
+    std::lock_guard<std::mutex> lk(engine->deviceInfoMutex);
+    for (int i = 0; i < 9; i++) {
+        const char* raw = fields[i] ? env->GetStringUTFChars(fields[i], nullptr) : nullptr;
+        engine->devInfo[i] = raw ? raw : "";
+        if (raw) env->ReleaseStringUTFChars(fields[i], raw);
+    }
 }
 
 /* ---- Navigation bridge (native -> Kotlin) --------------------------------- */
@@ -860,13 +1006,17 @@ Java_com_lvgl_android_engine_LvglEngine_nativeGetLastError(JNIEnv* env, jobject 
  */
 
 JNIEXPORT void JNICALL
-Java_com_lvgl_android_engine_LvglEngine_nativeSetNavCallback(JNIEnv* env, jobject /*thiz*/, jlong /*handle*/, jobject navigator) {
+Java_com_lvgl_android_engine_LvglEngine_nativeSetNavCallback(JNIEnv* env, jobject /*thiz*/,
+                                                          jlong /*handle*/, jobject navigator) {
     if (g_navRef) {
         env->DeleteGlobalRef(g_navRef);
         g_navRef = nullptr;
     }
     g_midNavTo = nullptr;
     g_midNavBack = nullptr;
+    g_midSetBrightness = nullptr;
+    g_midSetVolume = nullptr;
+    g_midToggleDarkMode = nullptr;
     if (!navigator) return;
     g_navRef = env->NewGlobalRef(navigator);
     if (env->ExceptionCheck()) {
@@ -880,13 +1030,114 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetNavCallback(JNIEnv* env, jobjec
         return;
     }
     g_midNavTo   = env->GetMethodID(cls, "navigateTo", "(I)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
     g_midNavBack = env->GetMethodID(cls, "navigateBack", "()V");
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        g_midNavTo = nullptr;
-        g_midNavBack = nullptr;
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    /* Optional: not every navigator implements the system controls. */
+    g_midSetBrightness = env->GetMethodID(cls, "setBrightness", "(F)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    g_midSetVolume = env->GetMethodID(cls, "setVolumePercent", "(I)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    /* Optional: not every navigator implements the theme toggle. */
+    g_midToggleDarkMode = env->GetMethodID(cls, "toggleDarkMode", "()V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    LOGI("navigation callback registered%s",
+         (g_midSetBrightness && g_midSetVolume) ? " (+system controls)" : "");
+}
+
+/* ---- App-defined screen bridge (Kotlin -> native) ------------------------- */
+
+static void set_ui_listener(JNIEnv* env, jobject listener);
+
+static void set_launcher_listener(JNIEnv* env, jobject listener);
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeRegisterScreen(JNIEnv* env, jobject /*thiz*/,
+                                                             jlong handle, jint id,
+                                                             jstring title,
+                                                             jboolean show_back,
+                                                             jstring json) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    const char* t = env->GetStringUTFChars(title, nullptr);
+    const char* j = env->GetStringUTFChars(json, nullptr);
+    ui_register_app_screen(static_cast<int>(id), t ? t : "",
+                           show_back != 0, j ? j : "");
+    if (t) env->ReleaseStringUTFChars(title, t);
+    if (j) env->ReleaseStringUTFChars(json, j);
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeUnregisterScreen(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                               jlong handle, jint id) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    ui_unregister_app_screen(static_cast<int>(id));
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeUpdateNode(JNIEnv* env, jobject /*thiz*/,
+                                                         jlong handle, jint screen_id,
+                                                         jstring node_id, jstring json) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    const char* n = env->GetStringUTFChars(node_id, nullptr);
+    const char* j = env->GetStringUTFChars(json, nullptr);
+    /* LVGL objects may only be touched on the LVGL thread. */
+    scheduleTask(engine, [engine, screen_id = static_cast<int>(screen_id),
+                          node = std::string(n ? n : ""),
+                          spec = std::string(j ? j : "")]() {
+        ui_update_node(screen_id, node.c_str(), spec.c_str());
+    });
+    if (n) env->ReleaseStringUTFChars(node_id, n);
+    if (j) env->ReleaseStringUTFChars(json, j);
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeSetUiListener(JNIEnv* env, jobject /*thiz*/,
+                                                            jlong /*handle*/,
+                                                            jobject listener) {
+    set_ui_listener(env, listener);
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeSetLauncherApps(JNIEnv* env, jobject /*thiz*/,
+                                                              jlong handle,
+                                                              jobjectArray labels,
+                                                              jobjectArray packages) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    const jsize n = labels ? env->GetArrayLength(labels) : 0;
+    std::vector<std::string> lbls;
+    std::vector<std::string> pkgs;
+    lbls.reserve(static_cast<size_t>(n));
+    pkgs.reserve(static_cast<size_t>(n));
+    for (jsize i = 0; i < n; i++) {
+        jstring l = static_cast<jstring>(env->GetObjectArrayElement(labels, i));
+        jstring p = static_cast<jstring>(env->GetObjectArrayElement(packages, i));
+        const char* lc = l ? env->GetStringUTFChars(l, nullptr) : nullptr;
+        const char* pc = p ? env->GetStringUTFChars(p, nullptr) : nullptr;
+        lbls.emplace_back(lc ? lc : "");
+        pkgs.emplace_back(pc ? pc : "");
+        if (lc) env->ReleaseStringUTFChars(l, lc);
+        if (pc) env->ReleaseStringUTFChars(p, pc);
+        if (l) env->DeleteLocalRef(l);
+        if (p) env->DeleteLocalRef(p);
     }
-    LOGI("navigation callback registered");
+    std::vector<const char*> lbl_ptrs;
+    std::vector<const char*> pkg_ptrs;
+    lbl_ptrs.reserve(lbls.size());
+    pkg_ptrs.reserve(pkgs.size());
+    for (const auto& s : lbls) lbl_ptrs.push_back(s.c_str());
+    for (const auto& s : pkgs) pkg_ptrs.push_back(s.c_str());
+    ui_set_launcher_apps(lbl_ptrs.data(), pkg_ptrs.data(), static_cast<int>(n));
+}
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeSetLauncherListener(JNIEnv* env, jobject /*thiz*/,
+                                                                  jlong /*handle*/,
+                                                                  jobject listener) {
+    set_launcher_listener(env, listener);
 }
 
 static bool nav_valid() {
@@ -907,4 +1158,124 @@ static void nav_back() {
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
+/* System-control bridge used by the dashboard's backlight / volume panels.
+ * The Kotlin side applies the real Android window / AudioManager change. */
+static void sys_set_brightness(int percent) {
+    JNIEnv* env = jniEnv();
+    if (!env || !g_navRef || !g_midSetBrightness) return;
+    env->CallVoidMethod(g_navRef, g_midSetBrightness,
+                        static_cast<jfloat>(percent / 100.0f));
+    if (env->ExceptionCheck()) {
+        LOGE("setBrightness JNI call failed");
+        env->ExceptionClear();
+    }
+}
+
+static void sys_set_volume(int percent) {
+    JNIEnv* env = jniEnv();
+    if (!env || !g_navRef || !g_midSetVolume) return;
+    env->CallVoidMethod(g_navRef, g_midSetVolume, static_cast<jint>(percent));
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+/* Theme bridge used by the dashboard's theme FAB. The Kotlin side flips the
+ * app-local dark-mode override and pushes the new palette to LVGL. */
+static void toggle_dark_mode() {
+    JNIEnv* env = jniEnv();
+    if (!env || !g_navRef || !g_midToggleDarkMode) return;
+    env->CallVoidMethod(g_navRef, g_midToggleDarkMode);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+/* ---- App-defined screen bridge (native -> Kotlin) ------------------------- */
+/*
+ * App screens declared in Kotlin (LvglUi) emit their taps and value changes
+ * through here. The listener is a LvglUiEventReceiver, whose onUiEvent method
+ * is resolved once and cached.
+ */
+static jobject  g_uiListener = nullptr;
+static jmethodID g_midUiEvent = nullptr;
+
+static void set_ui_listener(JNIEnv* env, jobject listener) {
+    if (g_uiListener) {
+        env->DeleteGlobalRef(g_uiListener);
+        g_uiListener = nullptr;
+    }
+    g_midUiEvent = nullptr;
+    if (!listener) return;
+    g_uiListener = env->NewGlobalRef(listener);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        g_uiListener = nullptr;
+        return;
+    }
+    jclass cls = env->GetObjectClass(g_uiListener);
+    if (!cls || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return;
+    }
+    g_midUiEvent = env->GetMethodID(cls, "onUiEvent",
+                                    "(ILjava/lang/String;Ljava/lang/String;I)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
 } /* extern "C" */
+
+namespace lvgl_android {
+
+/* Defined outside extern "C" so it matches the C++ declaration in demo_ui.h;
+ * the JNI listener state above is file-static and therefore reachable. */
+void ui_emit_event(int screen_id, const char* node_id, const char* type, int value) {
+    if (!g_vm || !g_uiListener || !g_midUiEvent) return;
+    JNIEnv* env = jniEnv();
+    if (!env) return;
+    jstring jid   = env->NewStringUTF(node_id ? node_id : "");
+    jstring jtype = env->NewStringUTF(type ? type : "");
+    env->CallVoidMethod(g_uiListener, g_midUiEvent, static_cast<jint>(screen_id),
+                        jid, jtype, static_cast<jint>(value));
+    env->DeleteLocalRef(jid);
+    env->DeleteLocalRef(jtype);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+} /* namespace lvgl_android */
+
+/* ---- Launcher app selection (native -> Kotlin) ---------------------------- */
+static jobject  g_launcherListener = nullptr;
+static jmethodID g_midAppSelected = nullptr;
+
+static void set_launcher_listener(JNIEnv* env, jobject listener) {
+    if (g_launcherListener) {
+        env->DeleteGlobalRef(g_launcherListener);
+        g_launcherListener = nullptr;
+    }
+    g_midAppSelected = nullptr;
+    if (!listener) return;
+    g_launcherListener = env->NewGlobalRef(listener);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        g_launcherListener = nullptr;
+        return;
+    }
+    jclass cls = env->GetObjectClass(g_launcherListener);
+    if (!cls || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return;
+    }
+    g_midAppSelected = env->GetMethodID(cls, "onAppSelected", "(Ljava/lang/String;)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+namespace lvgl_android {
+
+void ui_emit_launcher_event(const char* package_name) {
+    if (!g_vm || !g_launcherListener || !g_midAppSelected) return;
+    JNIEnv* env = jniEnv();
+    if (!env) return;
+    jstring jpkg = env->NewStringUTF(package_name ? package_name : "");
+    env->CallVoidMethod(g_launcherListener, g_midAppSelected, jpkg);
+    env->DeleteLocalRef(jpkg);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+} /* namespace lvgl_android */

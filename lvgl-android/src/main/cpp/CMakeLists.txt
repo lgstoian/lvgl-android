@@ -3,7 +3,7 @@ project("lvgl_android")
 
 set(LVGL_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../lvgl)
 
-file(GLOB_RECURSE LVGL_SOURCES
+file(GLOB_RECURSE LVGL_SOURCES CONFIGURE_DEPENDS
     ${LVGL_ROOT_DIR}/src/core/*.c
     ${LVGL_ROOT_DIR}/src/draw/*.c
     ${LVGL_ROOT_DIR}/src/font/*.c
@@ -19,7 +19,7 @@ file(GLOB_RECURSE LVGL_SOURCES
     ${LVGL_ROOT_DIR}/src/*.c
 )
 
-file(GLOB APP_SOURCES
+file(GLOB APP_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/*.c
 )

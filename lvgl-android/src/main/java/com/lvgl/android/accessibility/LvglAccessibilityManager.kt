@@ -14,7 +14,15 @@ import java.util.UUID
 
 /**
  * Manages accessibility features for the LVGL Android framework.
- * Provides TalkBack support, content descriptions, and focus navigation.
+ *
+ * Wraps the platform [AccessibilityManager], exposes the current state, and
+ * forwards state changes to registered [OnAccessibilityChangedListener]s.
+ * Only one system state-change listener is registered at a time and it is
+ * removed once the last wrapper listener is gone, so there is no leak when
+ * callers come and go.
+ *
+ * The manager holds a [Context]; keep the lifetime of the manager no longer
+ * than the owning activity when a non-application context is passed.
  */
 class LvglAccessibilityManager(private val context: Context) {
 
@@ -23,15 +31,27 @@ class LvglAccessibilityManager(private val context: Context) {
     private var systemListener: AccessibilityManager.AccessibilityStateChangeListener? = null
     private var systemListenerCount = 0
 
+    /** Receives accessibility service enable/disable notifications. */
     interface OnAccessibilityChangedListener {
+        /** Called when the accessibility service is enabled; [enabled] is `true`. */
         fun onAccessibilityEnabled(enabled: Boolean)
+
+        /** Called when the accessibility service is disabled. */
         fun onAccessibilityDisabled()
     }
 
+    /** Whether any accessibility service is currently enabled. */
     fun isEnabled(): Boolean = manager.isEnabled
 
+    /** Whether touch exploration (TalkBack-style interaction) is enabled. */
     fun isTouchExplorationEnabled(): Boolean = manager.isTouchExplorationEnabled
 
+    /**
+     * Registers [listener] for accessibility state changes.
+     *
+     * The system listener is installed on the first registration and removed
+     * when the last listener is removed.
+     */
     fun addListener(listener: OnAccessibilityChangedListener) {
         listeners.add(listener)
         /* Register the system listener once and keep it for as long as at least
@@ -47,6 +67,7 @@ class LvglAccessibilityManager(private val context: Context) {
         systemListenerCount++
     }
 
+    /** Unregisters a previously added [listener]; safe if it was never added. */
     fun removeListener(listener: OnAccessibilityChangedListener) {
         listeners.remove(listener)
         if (systemListenerCount > 0) systemListenerCount--
@@ -57,20 +78,34 @@ class LvglAccessibilityManager(private val context: Context) {
         }
     }
 
+    /**
+     * Announces [text] to the user when touch exploration is enabled.
+     *
+     * Announcements are dropped when touch exploration is off, because there
+     * is no screen reader to receive them.
+     */
     fun announce(text: String) {
         if (isTouchExplorationEnabled()) {
             LvglAccessibilityHelper.announce(context, text)
         }
     }
 
+    /**
+     * Marks the element identified by [viewId] as focusable or not.
+     *
+     * The id is opaque to this layer; it is the same id the app registered
+     * with its focus model.
+     */
     fun setFocusable(viewId: String, focusable: Boolean) {
         LvglAccessibilityHelper.setFocusable(viewId, focusable)
     }
 
+    /** Sets the content [description] announced for the element [viewId]. */
     fun setContentDescription(viewId: String, description: String) {
         LvglAccessibilityHelper.setContentDescription(viewId, description)
     }
 
+    /** Holds the private log tag. */
     companion object {
         private const val TAG = "LvglAccessibilityManager"
     }

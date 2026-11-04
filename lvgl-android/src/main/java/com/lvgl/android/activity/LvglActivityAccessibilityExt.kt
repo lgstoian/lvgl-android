@@ -11,7 +11,16 @@ import com.lvgl.android.accessibility.LvglFocusNavigation
 import com.lvgl.android.accessibility.LvglScreenReader
 
 /**
- * Extension point for accessibility on LvglActivity.
+ * Installs the accessibility bridges on this activity.
+ *
+ * Creates a [LvglAccessibilityManager] and a [LvglFocusNavigation] and, when
+ * accessibility is enabled, initialises [LvglScreenReader] and routes
+ * D-pad/keyboard focus from the decor view. Returns the helpers so the caller
+ * can keep using them (for example to announce focus changes).
+ *
+ * Call from `onCreate` on the UI thread, after the content view is set up.
+ *
+ * @return the helpers bound to this activity.
  */
 fun LvglActivity.setupAccessibility(): AccessibilitySetup {
     val accManager = LvglAccessibilityManager(this)
@@ -27,7 +36,12 @@ fun LvglActivity.setupAccessibility(): AccessibilitySetup {
     return AccessibilitySetup(accManager, focusNavigation)
 }
 
-/** Holds the accessibility helpers so callers can keep using them. */
+/**
+ * Holds the accessibility helpers so callers can keep using them.
+ *
+ * @property manager the accessibility service wrapper.
+ * @property focusNavigation the D-pad/keyboard focus navigator.
+ */
 data class AccessibilitySetup(
     val manager: LvglAccessibilityManager,
     val focusNavigation: LvglFocusNavigation

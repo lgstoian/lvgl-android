@@ -1,19 +1,23 @@
 # Build outputs
 build/
 .gradle/
+.kotlin/
 .idea/
 *.iml
 local.properties
 .cxx/
 *.apk
 *.aab
+*.hprof
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Screenshots (keep for documentation but ignore new ones)
-screenshots/*.png
+# Screenshots: the curated documentation set is committed; scratch files and
+# the dynamic-harness output are ignored.
+screenshots/_*.png
+screenshots/dynamic/
 !screenshots/.gitkeep
 
 # Temporary

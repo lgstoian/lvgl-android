@@ -1,1 +1,0 @@
-D:\Code\android lvgl\lvgl-android\src\main\cpp\CMakeLists.txt

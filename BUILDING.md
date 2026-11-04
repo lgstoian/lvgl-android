@@ -20,7 +20,7 @@ class MyActivity : LvglActivity() {
 import com.lvgl.android.input.LvglInputMethodService
 
 class MyKeyboard : LvglInputMethodService() {
-    override fun onCreateKeyboardView(): View {
+    override fun onCreateKeyboardView(): View? {
         return LvglSurfaceView(this)
     }
 }
@@ -71,8 +71,8 @@ class MyGame : LvglGameActivity() {
 cd "D:\Code\android lvgl"
 .\gradlew.bat assembleDebug --no-daemon
 
-# Install on emulator
-adb install -r app\build\outputs\apk\debug\app-debug.apk
+# Install on emulator (per-ABI APKs are also produced)
+adb install -r app\build\outputs\apk\debug\app-universal-debug.apk
 
 # Run
 adb shell am start -n com.lvgl.sample/.MainActivity
@@ -100,7 +100,9 @@ Update the native port code in `lvgl-android/src/main/cpp/lvgl_port.cpp` accordi
 | `LvglEngine` | Singleton rendering engine |
 | `LvglSurfaceView` | SurfaceView with LVGL |
 | `LvglActivity` | Base Activity with LVGL |
-| `MaterialTheme` | Material Design theme |
+| `MaterialTheme` | Material 3 theme resolution |
+| `MaterialPalette` | The 20 Material 3 tonal roles |
+| `LvglUi` | Kotlin DSL for declaring app screens |
 | `LvglInputMethodService` | Base for keyboard apps |
 | `LvglLauncherActivity` | Base for launcher apps |
 | `LvglGameActivity` | Base for games |
@@ -115,19 +117,26 @@ Update the native port code in `lvgl-android/src/main/cpp/lvgl_port.cpp` accordi
 `lvgl-android/src/main/cpp/lv_conf.h`
 
 ### lvgl Source Path (CMake)
-`lvgl-android/src/main/cpp/CMakeLists.txt` → `../../../../../lvgl`
+`lvgl-android/src/main/cpp/CMakeLists.txt` → `../../../../lvgl`
 
 ### Enable/Disable Features
 Toggle `LV_USE_*` in `lv_conf.h` and `lv_conf_template.h` defines.
 
 ## Theme Integration
 
-The `MaterialTheme` provides Material Design 3 colors:
-- Primary, secondary, surface, onSurface
-- Dark/light mode detection
-- Automatic theme change callbacks
+The Material 3 tonal palette is the single contract between Android and LVGL:
 
-`LvglThemeBridge` syncs these colors with LVGL's theme system. The `LvglActivity` handles system theme changes automatically.
+- `MaterialPalette` defines 20 tonal roles in a fixed index order shared with
+  the native `MaterialRole` enum.
+- `MaterialTheme` resolves the palette from the baseline scheme or the Android
+  system accents (Material You, API 31+) and follows the system dark/light mode.
+  The dashboard theme FAB can pin an app-local override.
+- `LvglThemeBridge` pushes the palette to native, which rebuilds the screen; the
+  native UI kit reads `ui_palette()` so every component re-themes.
+
+The native kit also provides Material 3 components (buttons, chips, FAB, cards,
+text field, bottom nav, dialog, snackbar, app bar) and the `LvglUi` Kotlin DSL
+for declaring app screens.
 
 ## DPI & Display
 
@@ -146,3 +155,10 @@ The `MaterialTheme` provides Material Design 3 colors:
 - Picture-in-picture support
 - Foldable device compatibility
 - State restoration
+
+## Next steps
+
+- [docs/quickstart.md](docs/quickstart.md) — your first screen, input and theme in 5 minutes.
+- [template/](template/README.md) — copy a minimal standalone app.
+- [docs/public-api.md](docs/public-api.md) — every public class.
+- [tools/size-report.ps1](tools/size-report.ps1) — release size budget.

@@ -9,41 +9,39 @@ import android.os.Bundle
 import android.view.WindowManager
 import com.lvgl.android.activity.LvglActivity
 
+/**
+ * Base activity for game-style LVGL apps that drive their own frame loop.
+ *
+ * Sets the window to the highest refresh rate available at the current
+ * resolution on Android 11+, and applies the immersive mode inherited from
+ * [LvglActivity]. Subclasses implement [onGameLoop] and call it from their own
+ * loop (for example a `Handler.postDelayed` cycle) rather than relying on the
+ * LVGL render thread.
+ */
 abstract class LvglGameActivity : LvglActivity() {
 
+    /**
+     * Desired frames per second, clamped to the 30..144 range on assignment.
+     *
+     * The value is advisory: it does not change the display mode by itself.
+     */
     var targetFps: Int = 60
         set(value) {
             field = value.coerceIn(30, 144)
         }
 
-    var immersiveMode: Boolean = true
-        public set
+    public override var immersiveMode: Boolean = true
 
+    /**
+     * Advances the game by one frame.
+     *
+     * @param deltaMs elapsed time in milliseconds since the previous call.
+     */
     abstract fun onGameLoop(deltaMs: Long)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setupImmersiveMode()
         setupFrameRate()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        setupImmersiveMode()
-    }
-
-    private fun setupImmersiveMode() {
-        if (immersiveMode) {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
-        }
     }
 
     private fun setupFrameRate() {
@@ -64,10 +62,16 @@ abstract class LvglGameActivity : LvglActivity() {
         }
     }
 
+    /**
+     * Locks the activity to [orientation].
+     *
+     * @param orientation an [android.content.pm.ActivityInfo] orientation constant.
+     */
     fun lockOrientation(orientation: Int) {
         requestedOrientation = orientation
     }
 
+    /** Clears any orientation lock, letting the system rotate freely. */
     fun unlockOrientation() {
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }

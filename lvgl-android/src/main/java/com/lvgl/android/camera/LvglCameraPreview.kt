@@ -20,6 +20,12 @@ import android.view.Surface
  * internal [ImageReader] rather than a display surface; this keeps the capture
  * session running (and the status accurate) without fighting LVGL for the
  * window. Callers that do have a Surface can pass it to [startPreview].
+ *
+ * Instances are not thread-confined, but Camera2 callbacks are delivered on the
+ * thread whose [android.os.Handler] is supplied to the open call; because this
+ * helper passes `null`, callbacks arrive on the calling thread's Looper (or a
+ * Camera2 background thread when the caller has no Looper). Call [open] from the
+ * UI thread for the simplest lifecycle.
  */
 class LvglCameraPreview(private val context: Context) {
 
@@ -30,6 +36,12 @@ class LvglCameraPreview(private val context: Context) {
     private var captureSession: android.hardware.camera2.CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
 
+    /**
+     * Opens [cameraId] and starts an internal preview.
+     *
+     * @param cameraId the Camera2 id to open; defaults to the first camera (`"0"`).
+     * @throws SecurityException when the CAMERA permission has not been granted.
+     */
     fun open(cameraId: String = "0") {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             manager.openCamera(cameraId, object : android.hardware.camera2.CameraDevice.StateCallback() {
@@ -80,7 +92,14 @@ class LvglCameraPreview(private val context: Context) {
         }
     }
 
-    /** Start the repeating preview into a caller-supplied Surface. */
+    /**
+     * Switches the repeating preview to a caller-supplied [surface].
+     *
+     * Has no effect until [open] has succeeded; the camera device must still be
+     * open.
+     *
+     * @param surface the surface that will receive preview frames.
+     */
     fun startPreview(surface: Surface) {
         val device = cameraDevice ?: return
         startSession(device, surface)
@@ -105,6 +124,13 @@ class LvglCameraPreview(private val context: Context) {
             }, null)
     }
 
+    /**
+     * Stops the repeating request and releases the capture session and the
+     * internal [ImageReader].
+     *
+     * Safe to call before [open] or after [close]; it is not an error to stop
+     * twice.
+     */
     fun stopPreview() {
         captureSession?.stopRepeating()
         captureSession?.close()
@@ -113,12 +139,19 @@ class LvglCameraPreview(private val context: Context) {
         imageReader = null
     }
 
+    /**
+     * Stops the preview and closes the camera device.
+     *
+     * Safe to call on any thread; call from [android.app.Activity.onPause] or
+     * `onStop` so another app can use the camera.
+     */
     fun close() {
         stopPreview()
         cameraDevice?.close()
         cameraDevice = null
     }
 
+    /** Holds the private log tag. */
     companion object {
         private const val TAG = "LvglCameraPreview"
     }

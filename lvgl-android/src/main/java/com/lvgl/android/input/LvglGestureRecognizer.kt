@@ -12,6 +12,19 @@ import kotlin.math.hypot
 
 /**
  * Wraps an LVGL-compatible touch event with Android MotionEvent extras.
+ *
+ * @param action masked [android.view.MotionEvent] action constant.
+ * @param x pointer x coordinate in pixels.
+ * @param y pointer y coordinate in pixels.
+ * @param pointerCount number of pointers in the event.
+ * @param pointerIndex index of the pointer the action applies to.
+ * @param pointerId stable id of that pointer.
+ * @param downTime time the gesture started.
+ * @param eventTime time this event was generated.
+ * @param pressure reported pressure, if any.
+ * @param orientation reported orientation, if any.
+ * @param size reported touch area size, if any.
+ * @param toolType [android.view.MotionEvent] tool type.
  */
 data class TouchEvent(
     val action: Int,
@@ -29,20 +42,81 @@ data class TouchEvent(
 )
 
 /**
- * Represents a detected gesture.
+ * A gesture detected from a stream of touch events.
+ *
+ * Each subtype carries the coordinates it was recognised at; use
+ * [GestureRecognizer.handle] to classify events and
+ * [GestureRecognizer.consumeLastGesture] to deliver each gesture once.
  */
 sealed class Gestures {
+    /**
+     * A short touch without significant movement.
+     *
+     * @property x horizontal coordinate of the tap.
+     * @property y vertical coordinate of the tap.
+     */
     data class Tap(val x: Float, val y: Float) : Gestures()
+
+    /**
+     * A touch held longer than the configured long-press timeout.
+     *
+     * @property x horizontal coordinate of the press.
+     * @property y vertical coordinate of the press.
+     * @property duration how long the press lasted, in milliseconds.
+     */
     data class LongPress(val x: Float, val y: Float, val duration: Long) : Gestures()
+
+    /**
+     * A fast drag in [direction].
+     *
+     * @property direction the dominant axis of the drag.
+     * @property velocityX horizontal velocity in pixels per second.
+     * @property velocityY vertical velocity in pixels per second.
+     */
     data class Swipe(val direction: Direction, val velocityX: Float, val velocityY: Float) : Gestures()
+
+    /**
+     * A two-finger scale gesture; [scaleFactor] is relative to the initial span.
+     *
+     * @property scaleFactor the current span divided by the initial span.
+     * @property centerX horizontal coordinate of the gesture centre.
+     * @property centerY vertical coordinate of the gesture centre.
+     */
     data class Pinch(val scaleFactor: Float, val centerX: Float, val centerY: Float) : Gestures()
+
+    /**
+     * A two-finger rotation gesture; [rotation] is in degrees.
+     *
+     * @property rotation the rotation relative to the initial orientation, in degrees.
+     * @property centerX horizontal coordinate of the gesture centre.
+     * @property centerY vertical coordinate of the gesture centre.
+     */
     data class Rotate(val rotation: Float, val centerX: Float, val centerY: Float) : Gestures()
 
-    enum class Direction { UP, DOWN, LEFT, RIGHT }
+    /** Cardinal swipe directions. */
+    enum class Direction {
+        /** Upwards. */
+        UP,
+
+        /** Downwards. */
+        DOWN,
+
+        /** To the left. */
+        LEFT,
+
+        /** To the right. */
+        RIGHT
+    }
 }
 
 /**
  * Gesture recognizer that detects common touch gestures.
+ *
+ * Feed every [android.view.MotionEvent] to [handle]; the recognizer keeps its
+ * own state and reports a gesture either directly or through
+ * [consumeLastGesture], which clears the pending result so each gesture is
+ * delivered exactly once.
+ *
  * Usage:
  * ```
  * val recognizer = GestureRecognizer()
@@ -57,11 +131,17 @@ class GestureRecognizer(
     private val config: Config = Config()
 ) {
 
+    /** Tuning thresholds; all distances are in pixels and times in milliseconds. */
     data class Config(
+        /** Minimum travel for a drag to count as a swipe. */
         val minSwipeDistance: Float = 100f,
+        /** Minimum velocity for a drag to count as a swipe. */
         val minSwipeVelocity: Float = 100f,
+        /** How long a stationary press must be held to become a long press. */
         val longPressTimeout: Long = 500L,
+        /** Maximum press duration that can still count as a tap. */
         val tapTimeout: Long = 200L,
+        /** Relative span change that starts a pinch gesture. */
         val pinchThreshold: Float = 0.05f
     )
 
@@ -78,6 +158,17 @@ class GestureRecognizer(
     private var secondDownY: Float = 0f
     private var hadSecond: Boolean = false
 
+    /**
+     * Feeds one [android.view.MotionEvent] into the recognizer.
+     *
+     * Tap and long-press results are returned directly; swipe and pinch results
+     * are stored and delivered through [consumeLastGesture]. The recognizer
+     * does not consume the event, so callers can still forward it to LVGL.
+     *
+     * @param event the touch event to classify.
+     * @return a completed [Gestures] result, or `null` when nothing was
+     *   recognised yet.
+     */
     fun handle(event: MotionEvent): Gestures? {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -182,6 +273,12 @@ class GestureRecognizer(
         return g
     }
 
+    /**
+     * Clears all in-progress gesture state.
+     *
+     * Call when the touch stream ends unexpectedly (for example when the view
+     * is detached) so a later gesture is not misclassified.
+     */
     fun reset() {
         isDown = false
         hadSecond = false

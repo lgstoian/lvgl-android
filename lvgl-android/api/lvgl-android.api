@@ -1,0 +1,1012 @@
+public final class com/lvgl/android/accessibility/LvglAccessibilityDelegate {
+	public fun <init> (Landroid/content/Context;Ljava/lang/String;)V
+	public final fun dispatchFocusGained (Ljava/lang/String;)V
+	public final fun dispatchFocusLost ()V
+}
+
+public final class com/lvgl/android/accessibility/LvglAccessibilityHelper {
+	public static final field INSTANCE Lcom/lvgl/android/accessibility/LvglAccessibilityHelper;
+	public static final field TAG Ljava/lang/String;
+	public static final fun announce (Landroid/content/Context;Ljava/lang/String;)V
+	public static final fun setContentDescription (Ljava/lang/String;Ljava/lang/String;)V
+	public static final fun setFocusable (Ljava/lang/String;Z)V
+}
+
+public final class com/lvgl/android/accessibility/LvglAccessibilityManager {
+	public static final field Companion Lcom/lvgl/android/accessibility/LvglAccessibilityManager$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun addListener (Lcom/lvgl/android/accessibility/LvglAccessibilityManager$OnAccessibilityChangedListener;)V
+	public final fun announce (Ljava/lang/String;)V
+	public final fun isEnabled ()Z
+	public final fun isTouchExplorationEnabled ()Z
+	public final fun removeListener (Lcom/lvgl/android/accessibility/LvglAccessibilityManager$OnAccessibilityChangedListener;)V
+	public final fun setContentDescription (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun setFocusable (Ljava/lang/String;Z)V
+}
+
+public final class com/lvgl/android/accessibility/LvglAccessibilityManager$Companion {
+}
+
+public abstract interface class com/lvgl/android/accessibility/LvglAccessibilityManager$OnAccessibilityChangedListener {
+	public abstract fun onAccessibilityDisabled ()V
+	public abstract fun onAccessibilityEnabled (Z)V
+}
+
+public final class com/lvgl/android/accessibility/LvglFocusNavigation {
+	public static final field Companion Lcom/lvgl/android/accessibility/LvglFocusNavigation$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun addFocusable (I)V
+	public final fun getFocused ()I
+	public final fun handleKeyEvent (I)Z
+	public final fun removeFocusable (I)V
+	public final fun setFocused (I)V
+}
+
+public final class com/lvgl/android/accessibility/LvglFocusNavigation$Companion {
+}
+
+public final class com/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection : java/lang/Enum {
+	public static final field DOWN Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+	public static final field LEFT Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+	public static final field RIGHT Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+	public static final field UP Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+	public final fun getDx ()I
+	public final fun getDy ()I
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+	public static fun values ()[Lcom/lvgl/android/accessibility/LvglFocusNavigation$FocusDirection;
+}
+
+public final class com/lvgl/android/accessibility/LvglScreenReader {
+	public static final field INSTANCE Lcom/lvgl/android/accessibility/LvglScreenReader;
+	public final fun announce (Landroid/app/Activity;Ljava/lang/String;)V
+	public final fun initialize (Landroid/content/Context;)V
+}
+
+public final class com/lvgl/android/activity/AccessibilitySetup {
+	public fun <init> (Lcom/lvgl/android/accessibility/LvglAccessibilityManager;Lcom/lvgl/android/accessibility/LvglFocusNavigation;)V
+	public final fun component1 ()Lcom/lvgl/android/accessibility/LvglAccessibilityManager;
+	public final fun component2 ()Lcom/lvgl/android/accessibility/LvglFocusNavigation;
+	public final fun copy (Lcom/lvgl/android/accessibility/LvglAccessibilityManager;Lcom/lvgl/android/accessibility/LvglFocusNavigation;)Lcom/lvgl/android/activity/AccessibilitySetup;
+	public static synthetic fun copy$default (Lcom/lvgl/android/activity/AccessibilitySetup;Lcom/lvgl/android/accessibility/LvglAccessibilityManager;Lcom/lvgl/android/accessibility/LvglFocusNavigation;ILjava/lang/Object;)Lcom/lvgl/android/activity/AccessibilitySetup;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFocusNavigation ()Lcom/lvgl/android/accessibility/LvglFocusNavigation;
+	public final fun getManager ()Lcom/lvgl/android/accessibility/LvglAccessibilityManager;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class com/lvgl/android/activity/LvglActivity : androidx/appcompat/app/AppCompatActivity, com/lvgl/android/config/DisplayMetricsManager$OnDisplayMetricsChangedListener, com/lvgl/android/theme/MaterialTheme$OnThemeChangedListener {
+	public static final field Companion Lcom/lvgl/android/activity/LvglActivity$Companion;
+	public fun <init> ()V
+	protected fun applyImmersiveMode ()V
+	protected fun getImmersiveMode ()Z
+	public fun onConfigurationChanged (Landroid/content/res/Configuration;)V
+	protected fun onCreate (Landroid/os/Bundle;)V
+	public abstract fun onCreateLvgl ()V
+	protected fun onDestroy ()V
+	public fun onDisplayMetricsChanged (Lcom/lvgl/android/config/DisplayMetricsManager;)V
+	public fun onLvglMetricsChanged (Lcom/lvgl/android/config/DisplayMetricsManager;)V
+	public fun onLvglThemeChanged (Lcom/lvgl/android/theme/MaterialTheme;)V
+	protected fun onPause ()V
+	protected fun onResume ()V
+	public fun onThemeChanged (Lcom/lvgl/android/theme/MaterialTheme;)V
+	protected fun setImmersiveMode (Z)V
+	protected final fun setLvglScreen (I)V
+}
+
+public final class com/lvgl/android/activity/LvglActivity$Companion {
+	public final fun getScreenResolver ()Lkotlin/jvm/functions/Function1;
+	public final fun setScreenResolver (Lkotlin/jvm/functions/Function1;)V
+}
+
+public final class com/lvgl/android/activity/LvglActivityAccessibilityExtKt {
+	public static final fun setupAccessibility (Lcom/lvgl/android/activity/LvglActivity;)Lcom/lvgl/android/activity/AccessibilitySetup;
+}
+
+public final class com/lvgl/android/camera/LvglCameraPreview {
+	public static final field Companion Lcom/lvgl/android/camera/LvglCameraPreview$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun close ()V
+	public final fun open (Ljava/lang/String;)V
+	public static synthetic fun open$default (Lcom/lvgl/android/camera/LvglCameraPreview;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun startPreview (Landroid/view/Surface;)V
+	public final fun stopPreview ()V
+}
+
+public final class com/lvgl/android/camera/LvglCameraPreview$Companion {
+}
+
+public final class com/lvgl/android/config/ConfigurationManager {
+	public static final field Companion Lcom/lvgl/android/config/ConfigurationManager$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun addListener (Lcom/lvgl/android/config/ConfigurationManager$OnConfigurationChangedListener;)V
+	public final fun removeListener (Lcom/lvgl/android/config/ConfigurationManager$OnConfigurationChangedListener;)V
+	public final fun update (Landroid/content/res/Configuration;)V
+}
+
+public final class com/lvgl/android/config/ConfigurationManager$Companion {
+}
+
+public final class com/lvgl/android/config/ConfigurationManager$ConfigurationEvent {
+	public fun <init> (ZZZZZZLandroid/content/res/Configuration;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Landroid/content/res/Configuration;
+	public final fun copy (ZZZZZZLandroid/content/res/Configuration;)Lcom/lvgl/android/config/ConfigurationManager$ConfigurationEvent;
+	public static synthetic fun copy$default (Lcom/lvgl/android/config/ConfigurationManager$ConfigurationEvent;ZZZZZZLandroid/content/res/Configuration;ILjava/lang/Object;)Lcom/lvgl/android/config/ConfigurationManager$ConfigurationEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfiguration ()Landroid/content/res/Configuration;
+	public final fun getFontScaleChanged ()Z
+	public final fun getLocaleChanged ()Z
+	public final fun getOrientationChanged ()Z
+	public final fun getScreenSizeChanged ()Z
+	public final fun getSmallestScreenSizeChanged ()Z
+	public final fun getUiModeChanged ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/lvgl/android/config/ConfigurationManager$OnConfigurationChangedListener {
+	public abstract fun onConfigurationChanged (Lcom/lvgl/android/config/ConfigurationManager$ConfigurationEvent;)V
+}
+
+public final class com/lvgl/android/config/DisplayMetricsManager {
+	public static final field Companion Lcom/lvgl/android/config/DisplayMetricsManager$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun addListener (Lcom/lvgl/android/config/DisplayMetricsManager$OnDisplayMetricsChangedListener;)V
+	public final fun getDensity ()F
+	public final fun getDensityDpi ()I
+	public final fun getScaledDensity ()F
+	public final fun getScreenHeightDp ()I
+	public final fun getScreenHeightPx ()I
+	public final fun getScreenWidthDp ()I
+	public final fun getScreenWidthPx ()I
+	public final fun getSmallestScreenWidthDp ()I
+	public final fun isLandscape ()Z
+	public final fun onConfigurationChanged (Landroid/content/res/Configuration;)V
+	public final fun removeListener (Lcom/lvgl/android/config/DisplayMetricsManager$OnDisplayMetricsChangedListener;)V
+	public final fun update (Landroid/content/Context;)V
+}
+
+public final class com/lvgl/android/config/DisplayMetricsManager$Companion {
+}
+
+public abstract interface class com/lvgl/android/config/DisplayMetricsManager$OnDisplayMetricsChangedListener {
+	public abstract fun onDisplayMetricsChanged (Lcom/lvgl/android/config/DisplayMetricsManager;)V
+}
+
+public final class com/lvgl/android/config/DpiManager {
+	public static final field Companion Lcom/lvgl/android/config/DpiManager$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun dpToPx (F)I
+	public final fun getDensity ()F
+	public final fun getDpi ()I
+	public final fun getOrientation ()I
+	public final fun getScreenHeightDp ()F
+	public final fun getScreenHeightPx ()I
+	public final fun getScreenWidthDp ()F
+	public final fun getScreenWidthPx ()I
+	public final fun getSizeCategory ()Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public final fun isLandscape ()Z
+	public final fun isPortrait ()Z
+	public final fun pxToDp (F)F
+	public final fun pxToSp (F)F
+	public final fun spToPx (F)I
+}
+
+public final class com/lvgl/android/config/DpiManager$Companion {
+}
+
+public final class com/lvgl/android/config/DpiManager$ScreenSize : java/lang/Enum {
+	public static final field EXTRA_LARGE Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public static final field LARGE Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public static final field MEDIUM Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public static final field SMALL Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/lvgl/android/config/DpiManager$ScreenSize;
+	public static fun values ()[Lcom/lvgl/android/config/DpiManager$ScreenSize;
+}
+
+public final class com/lvgl/android/engine/LvglEngine {
+	public static final field Companion Lcom/lvgl/android/engine/LvglEngine$Companion;
+	public final fun applyTheme (Z[I)V
+	public final fun captureFrame ()[I
+	public final fun currentScreen ()I
+	public final fun deinitDisplay (Ljava/lang/Object;)V
+	public final fun dumpLayoutReport ()Ljava/lang/String;
+	public final fun getInitialized ()Z
+	public final fun getLauncherAppListener ()Lcom/lvgl/android/launcher/LauncherAppListener;
+	public final fun getNativeLoadError ()Ljava/lang/String;
+	public final fun getScreenNavigator ()Lcom/lvgl/android/engine/LvglEngine$ScreenNavigator;
+	public final fun getUiEventListener ()Lcom/lvgl/android/ui/LvglUiEventReceiver;
+	public final fun initDisplay (Ljava/lang/Object;Landroid/view/Surface;III)V
+	public final fun initialize ()V
+	public final fun isDisplayReady ()Z
+	public final fun lastError ()Ljava/lang/String;
+	public final fun onTouchEvent (IFF)V
+	public final fun pause ()V
+	public final fun registerScreen (ILjava/lang/String;ZLjava/lang/String;)V
+	public final fun resume ()V
+	public final fun setBatteryLevel (IZ)V
+	public final fun setDeviceInfo (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun setLauncherAppListener (Lcom/lvgl/android/launcher/LauncherAppListener;)V
+	public final fun setLauncherApps ([Ljava/lang/String;[Ljava/lang/String;)V
+	public final fun setScreen (I)V
+	public final fun setScreenNavigator (Lcom/lvgl/android/engine/LvglEngine$ScreenNavigator;)V
+	public final fun setStatusText (Ljava/lang/String;)V
+	public final fun setUiEventListener (Lcom/lvgl/android/ui/LvglUiEventReceiver;)V
+	public final fun shutdown ()V
+	public final fun unregisterScreen (I)V
+	public final fun updateNode (ILjava/lang/String;Ljava/lang/String;)V
+}
+
+public final class com/lvgl/android/engine/LvglEngine$Companion {
+	public final fun getInstance ()Lcom/lvgl/android/engine/LvglEngine;
+}
+
+public abstract interface class com/lvgl/android/engine/LvglEngine$ScreenNavigator {
+	public abstract fun navigateBack ()V
+	public abstract fun navigateTo (I)V
+	public abstract fun setBrightness (F)V
+	public abstract fun setVolumePercent (I)V
+	public abstract fun toggleDarkMode ()V
+}
+
+public final class com/lvgl/android/engine/LvglEngine$ScreenNavigator$DefaultImpls {
+	public static fun setBrightness (Lcom/lvgl/android/engine/LvglEngine$ScreenNavigator;F)V
+	public static fun setVolumePercent (Lcom/lvgl/android/engine/LvglEngine$ScreenNavigator;I)V
+	public static fun toggleDarkMode (Lcom/lvgl/android/engine/LvglEngine$ScreenNavigator;)V
+}
+
+public abstract class com/lvgl/android/game/LvglGameActivity : com/lvgl/android/activity/LvglActivity {
+	public fun <init> ()V
+	public fun getImmersiveMode ()Z
+	public final fun getTargetFps ()I
+	public final fun lockOrientation (I)V
+	protected fun onCreate (Landroid/os/Bundle;)V
+	public abstract fun onGameLoop (J)V
+	public fun setImmersiveMode (Z)V
+	public final fun setTargetFps (I)V
+	public final fun unlockOrientation ()V
+}
+
+public final class com/lvgl/android/input/GestureRecognizer {
+	public fun <init> ()V
+	public fun <init> (Lcom/lvgl/android/input/GestureRecognizer$Config;)V
+	public synthetic fun <init> (Lcom/lvgl/android/input/GestureRecognizer$Config;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun consumeLastGesture ()Lcom/lvgl/android/input/Gestures;
+	public final fun handle (Landroid/view/MotionEvent;)Lcom/lvgl/android/input/Gestures;
+	public final fun reset ()V
+}
+
+public final class com/lvgl/android/input/GestureRecognizer$Config {
+	public fun <init> ()V
+	public fun <init> (FFJJF)V
+	public synthetic fun <init> (FFJJFILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun component5 ()F
+	public final fun copy (FFJJF)Lcom/lvgl/android/input/GestureRecognizer$Config;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/GestureRecognizer$Config;FFJJFILjava/lang/Object;)Lcom/lvgl/android/input/GestureRecognizer$Config;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLongPressTimeout ()J
+	public final fun getMinSwipeDistance ()F
+	public final fun getMinSwipeVelocity ()F
+	public final fun getPinchThreshold ()F
+	public final fun getTapTimeout ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class com/lvgl/android/input/Gestures {
+}
+
+public final class com/lvgl/android/input/Gestures$Direction : java/lang/Enum {
+	public static final field DOWN Lcom/lvgl/android/input/Gestures$Direction;
+	public static final field LEFT Lcom/lvgl/android/input/Gestures$Direction;
+	public static final field RIGHT Lcom/lvgl/android/input/Gestures$Direction;
+	public static final field UP Lcom/lvgl/android/input/Gestures$Direction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/lvgl/android/input/Gestures$Direction;
+	public static fun values ()[Lcom/lvgl/android/input/Gestures$Direction;
+}
+
+public final class com/lvgl/android/input/Gestures$LongPress : com/lvgl/android/input/Gestures {
+	public fun <init> (FFJ)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun component3 ()J
+	public final fun copy (FFJ)Lcom/lvgl/android/input/Gestures$LongPress;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/Gestures$LongPress;FFJILjava/lang/Object;)Lcom/lvgl/android/input/Gestures$LongPress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDuration ()J
+	public final fun getX ()F
+	public final fun getY ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/input/Gestures$Pinch : com/lvgl/android/input/Gestures {
+	public fun <init> (FFF)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun component3 ()F
+	public final fun copy (FFF)Lcom/lvgl/android/input/Gestures$Pinch;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/Gestures$Pinch;FFFILjava/lang/Object;)Lcom/lvgl/android/input/Gestures$Pinch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCenterX ()F
+	public final fun getCenterY ()F
+	public final fun getScaleFactor ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/input/Gestures$Rotate : com/lvgl/android/input/Gestures {
+	public fun <init> (FFF)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun component3 ()F
+	public final fun copy (FFF)Lcom/lvgl/android/input/Gestures$Rotate;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/Gestures$Rotate;FFFILjava/lang/Object;)Lcom/lvgl/android/input/Gestures$Rotate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCenterX ()F
+	public final fun getCenterY ()F
+	public final fun getRotation ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/input/Gestures$Swipe : com/lvgl/android/input/Gestures {
+	public fun <init> (Lcom/lvgl/android/input/Gestures$Direction;FF)V
+	public final fun component1 ()Lcom/lvgl/android/input/Gestures$Direction;
+	public final fun component2 ()F
+	public final fun component3 ()F
+	public final fun copy (Lcom/lvgl/android/input/Gestures$Direction;FF)Lcom/lvgl/android/input/Gestures$Swipe;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/Gestures$Swipe;Lcom/lvgl/android/input/Gestures$Direction;FFILjava/lang/Object;)Lcom/lvgl/android/input/Gestures$Swipe;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDirection ()Lcom/lvgl/android/input/Gestures$Direction;
+	public final fun getVelocityX ()F
+	public final fun getVelocityY ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/input/Gestures$Tap : com/lvgl/android/input/Gestures {
+	public fun <init> (FF)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun copy (FF)Lcom/lvgl/android/input/Gestures$Tap;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/Gestures$Tap;FFILjava/lang/Object;)Lcom/lvgl/android/input/Gestures$Tap;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getX ()F
+	public final fun getY ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/input/HardwareKeyboardHandler {
+	public static final field Companion Lcom/lvgl/android/input/HardwareKeyboardHandler$Companion;
+	public fun <init> (Landroid/content/Context;Lkotlin/jvm/functions/Function2;)V
+	public final fun processKeyEvent (Landroid/view/KeyEvent;)Z
+}
+
+public final class com/lvgl/android/input/HardwareKeyboardHandler$Companion {
+}
+
+public final class com/lvgl/android/input/HardwareKeyboardHandler$KeyCode : java/lang/Enum {
+	public static final field BACKSPACE Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field CENTER Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field DOWN Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field END Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field ENTER Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field ESCAPE Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field HOME Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field LEFT Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field PAGE_DOWN Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field PAGE_UP Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field RIGHT Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field SPACE Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field TAB Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field UNKNOWN Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static final field UP Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getRawCode ()I
+	public static fun valueOf (Ljava/lang/String;)Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+	public static fun values ()[Lcom/lvgl/android/input/HardwareKeyboardHandler$KeyCode;
+}
+
+public abstract class com/lvgl/android/input/LvglInputMethodService : android/inputmethodservice/InputMethodService {
+	public static final field Companion Lcom/lvgl/android/input/LvglInputMethodService$Companion;
+	public fun <init> ()V
+	protected final fun commitText (Ljava/lang/String;)V
+	protected final fun deleteSurroundingText (II)V
+	protected final fun getActiveInputConnection ()Landroid/view/inputmethod/InputConnection;
+	protected fun getOwnsProcess ()Z
+	public fun onCreate ()V
+	public fun onCreateInputView ()Landroid/view/View;
+	public abstract fun onCreateKeyboardView ()Landroid/view/View;
+	public fun onDestroy ()V
+	public fun onFinishInputView (Z)V
+	public fun onStartInputView (Landroid/view/inputmethod/EditorInfo;Z)V
+	protected final fun sendKeyDownUp (I)V
+}
+
+public final class com/lvgl/android/input/LvglInputMethodService$Companion {
+}
+
+public final class com/lvgl/android/input/LvglInputProcessor {
+	public static final field Companion Lcom/lvgl/android/input/LvglInputProcessor$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public final fun processMotionEvent (Landroid/view/MotionEvent;)Lcom/lvgl/android/input/Gestures;
+}
+
+public final class com/lvgl/android/input/LvglInputProcessor$Companion {
+}
+
+public final class com/lvgl/android/input/TouchEvent {
+	public fun <init> (IFFIIIJJFFFI)V
+	public synthetic fun <init> (IFFIIIJJFFFIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component10 ()F
+	public final fun component11 ()F
+	public final fun component12 ()I
+	public final fun component2 ()F
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()J
+	public final fun component8 ()J
+	public final fun component9 ()F
+	public final fun copy (IFFIIIJJFFFI)Lcom/lvgl/android/input/TouchEvent;
+	public static synthetic fun copy$default (Lcom/lvgl/android/input/TouchEvent;IFFIIIJJFFFIILjava/lang/Object;)Lcom/lvgl/android/input/TouchEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()I
+	public final fun getDownTime ()J
+	public final fun getEventTime ()J
+	public final fun getOrientation ()F
+	public final fun getPointerCount ()I
+	public final fun getPointerId ()I
+	public final fun getPointerIndex ()I
+	public final fun getPressure ()F
+	public final fun getSize ()F
+	public final fun getToolType ()I
+	public final fun getX ()F
+	public final fun getY ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/lvgl/android/launcher/LauncherAppListener {
+	public abstract fun onAppSelected (Ljava/lang/String;)V
+}
+
+public abstract class com/lvgl/android/launcher/LvglLauncherActivity : com/lvgl/android/activity/LvglActivity {
+	public fun <init> ()V
+	public final fun getAppList ()Ljava/util/List;
+	public final fun getDefaultHomeIntent ()Landroid/content/Intent;
+	public final fun launchApp (Ljava/lang/String;)V
+	public abstract fun onAllAppsChanged ()V
+	protected fun onCreate (Landroid/os/Bundle;)V
+	public abstract fun onPackageAdded (Ljava/lang/String;)V
+	public abstract fun onPackageChanged (Ljava/lang/String;)V
+	public abstract fun onPackageRemoved (Ljava/lang/String;)V
+	protected fun onPause ()V
+	protected fun onResume ()V
+}
+
+public final class com/lvgl/android/navigation/LvglNavigation {
+	public static final field INSTANCE Lcom/lvgl/android/navigation/LvglNavigation;
+	public final fun clearStack ()V
+	public final fun getBackStack ()Ljava/util/List;
+	public final fun getMainActivity ()Landroid/app/Activity;
+	public final fun navigateBack (Landroid/app/Activity;)V
+	public final fun navigateTo (Landroid/app/Activity;Ljava/lang/Class;)V
+	public final fun popScreen ()Ljava/lang/String;
+	public final fun pushScreen (Ljava/lang/String;)V
+	public final fun setMainActivity (Landroid/app/Activity;)V
+}
+
+public final class com/lvgl/android/perf/LvglPerformanceMonitor {
+	public static final field INSTANCE Lcom/lvgl/android/perf/LvglPerformanceMonitor;
+	public final fun getFps ()I
+	public final fun getFrameCount ()J
+	public final fun getStats ()Ljava/util/Map;
+	public final fun onFrameRendered ()V
+	public final fun resetStats ()V
+	public final fun start ()V
+	public final fun stop ()V
+}
+
+public final class com/lvgl/android/system/LvglDeviceInfo {
+	public static final field INSTANCE Lcom/lvgl/android/system/LvglDeviceInfo;
+	public final fun collect (Landroid/content/Context;)Lcom/lvgl/android/system/LvglDeviceInfo$Facts;
+	public final fun formatSize (J)Ljava/lang/String;
+	public final fun socMarketingName (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/lvgl/android/system/LvglDeviceInfo$Facts {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/lvgl/android/system/LvglDeviceInfo$Facts;
+	public static synthetic fun copy$default (Lcom/lvgl/android/system/LvglDeviceInfo$Facts;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/system/LvglDeviceInfo$Facts;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAndroidVersion ()Ljava/lang/String;
+	public final fun getCameras ()Ljava/lang/String;
+	public final fun getDisplay ()Ljava/lang/String;
+	public final fun getManufacturer ()Ljava/lang/String;
+	public final fun getMemory ()Ljava/lang/String;
+	public final fun getModel ()Ljava/lang/String;
+	public final fun getSensors ()Ljava/lang/String;
+	public final fun getSoc ()Ljava/lang/String;
+	public final fun getStorage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/system/LvglSystemControl {
+	public static final field INSTANCE Lcom/lvgl/android/system/LvglSystemControl;
+	public final fun applyBrightness (Landroid/view/Window;I)V
+	public final fun applyVolumePercent (Landroid/content/Context;I)V
+	public final fun batteryLevel (Landroid/content/Context;)I
+	public final fun isCharging (Landroid/content/Context;)Z
+}
+
+public final class com/lvgl/android/theme/LvglThemeBridge : com/lvgl/android/theme/MaterialTheme$OnThemeChangedListener {
+	public static final field Companion Lcom/lvgl/android/theme/LvglThemeBridge$Companion;
+	public fun <init> ()V
+	public final fun applyCurrentTheme ()V
+	public fun onThemeChanged (Lcom/lvgl/android/theme/MaterialTheme;)V
+}
+
+public final class com/lvgl/android/theme/LvglThemeBridge$Companion {
+}
+
+public final class com/lvgl/android/theme/MaterialPalette {
+	public static final field BACKGROUND I
+	public static final field ERROR I
+	public static final field ERROR_CONTAINER I
+	public static final field INSTANCE Lcom/lvgl/android/theme/MaterialPalette;
+	public static final field ON_BACKGROUND I
+	public static final field ON_ERROR I
+	public static final field ON_ERROR_CONTAINER I
+	public static final field ON_PRIMARY I
+	public static final field ON_PRIMARY_CONTAINER I
+	public static final field ON_SECONDARY I
+	public static final field ON_SECONDARY_CONTAINER I
+	public static final field ON_SURFACE I
+	public static final field ON_SURFACE_VARIANT I
+	public static final field OUTLINE I
+	public static final field OUTLINE_VARIANT I
+	public static final field PRIMARY I
+	public static final field PRIMARY_CONTAINER I
+	public static final field SECONDARY I
+	public static final field SECONDARY_CONTAINER I
+	public static final field SIZE I
+	public static final field SURFACE I
+	public static final field SURFACE_VARIANT I
+	public final fun dark ()[I
+	public final fun dynamic (Landroid/content/Context;Z)[I
+	public final fun light ()[I
+}
+
+public final class com/lvgl/android/theme/MaterialTheme {
+	public static final field Companion Lcom/lvgl/android/theme/MaterialTheme$Companion;
+	public final fun addListener (Lcom/lvgl/android/theme/MaterialTheme$OnThemeChangedListener;)V
+	public final fun followSystemDarkMode ()V
+	public final fun getBackgroundOpacity ()I
+	public final fun getOnSurfaceColor ()I
+	public final fun getPrimaryColor ()I
+	public final fun getSecondaryColor ()I
+	public final fun getSurfaceColor ()I
+	public final fun getUseDynamicColors ()Z
+	public final fun initialize (Landroid/content/Context;)V
+	public final fun isDarkMode ()Z
+	public final fun materialPalette ()[I
+	public final fun onConfigurationChanged (Landroid/content/Context;Landroid/content/res/Configuration;)V
+	public final fun removeListener (Lcom/lvgl/android/theme/MaterialTheme$OnThemeChangedListener;)V
+	public final fun setDynamicColors (Landroid/content/Context;Z)V
+	public final fun toggleDarkMode (Landroid/content/Context;)V
+}
+
+public final class com/lvgl/android/theme/MaterialTheme$Companion {
+	public final fun getInstance ()Lcom/lvgl/android/theme/MaterialTheme;
+}
+
+public abstract interface class com/lvgl/android/theme/MaterialTheme$OnThemeChangedListener {
+	public abstract fun onThemeChanged (Lcom/lvgl/android/theme/MaterialTheme;)V
+}
+
+public final class com/lvgl/android/ui/LvglButtonStyle : java/lang/Enum {
+	public static final field FILLED Lcom/lvgl/android/ui/LvglButtonStyle;
+	public static final field OUTLINED Lcom/lvgl/android/ui/LvglButtonStyle;
+	public static final field TEXT Lcom/lvgl/android/ui/LvglButtonStyle;
+	public static final field TONAL Lcom/lvgl/android/ui/LvglButtonStyle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/lvgl/android/ui/LvglButtonStyle;
+	public static fun values ()[Lcom/lvgl/android/ui/LvglButtonStyle;
+}
+
+public abstract class com/lvgl/android/ui/LvglNode {
+	public abstract fun getId ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Arc : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;II)Lcom/lvgl/android/ui/LvglNode$Arc;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Arc;Ljava/lang/String;IIILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Arc;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getMax ()I
+	public final fun getValue ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Button : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/lvgl/android/ui/LvglButtonStyle;
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Lkotlin/jvm/functions/Function0;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLkotlin/jvm/functions/Function0;)Lcom/lvgl/android/ui/LvglNode$Button;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Button;Ljava/lang/String;Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLkotlin/jvm/functions/Function0;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Button;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDanger ()Z
+	public final fun getFillWidth ()Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getOnClick ()Lkotlin/jvm/functions/Function0;
+	public final fun getStyle ()Lcom/lvgl/android/ui/LvglButtonStyle;
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Checkbox : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Checkbox;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Checkbox;Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Checkbox;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChecked ()Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getOnChange ()Lkotlin/jvm/functions/Function1;
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Column : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;ZII)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;ZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Z
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/util/List;ZII)Lcom/lvgl/android/ui/LvglNode$Column;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Column;Ljava/lang/String;Ljava/util/List;ZIIILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Column;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCard ()Z
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getGapDp ()I
+	public fun getId ()Ljava/lang/String;
+	public final fun getPadDp ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Divider : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Divider;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Divider;Ljava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Divider;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Dropdown : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()I
+	public final fun component4 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Dropdown;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Dropdown;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Dropdown;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getOnSelect ()Lkotlin/jvm/functions/Function1;
+	public final fun getOptions ()Ljava/util/List;
+	public final fun getSelectedIndex ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Label : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;I)Lcom/lvgl/android/ui/LvglNode$Label;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Label;Ljava/lang/String;Ljava/lang/String;IILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Label;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getSizeDp ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Progress : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;II)Lcom/lvgl/android/ui/LvglNode$Progress;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Progress;Ljava/lang/String;IIILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Progress;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getMax ()I
+	public final fun getValue ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Row : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;ZII)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;ZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Z
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/util/List;ZII)Lcom/lvgl/android/ui/LvglNode$Row;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Row;Ljava/lang/String;Ljava/util/List;ZIIILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Row;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCard ()Z
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getGapDp ()I
+	public fun getId ()Ljava/lang/String;
+	public final fun getPadDp ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Slider : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;IIILkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;IIILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;IIILkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Slider;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Slider;Ljava/lang/String;IIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Slider;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getMax ()I
+	public final fun getMin ()I
+	public final fun getOnChange ()Lkotlin/jvm/functions/Function1;
+	public final fun getValue ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Spacer : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;I)V
+	public synthetic fun <init> (Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/lvgl/android/ui/LvglNode$Spacer;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Spacer;Ljava/lang/String;IILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Spacer;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getSizeDp ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglNode$Switch : com/lvgl/android/ui/LvglNode {
+	public fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Switch;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglNode$Switch;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Switch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChecked ()Z
+	public fun getId ()Ljava/lang/String;
+	public final fun getOnChange ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglUi {
+	public static final field APP_SCREEN_BASE I
+	public static final field INSTANCE Lcom/lvgl/android/ui/LvglUi;
+	public final fun getListener ()Lcom/lvgl/android/ui/LvglUiListener;
+	public final fun registerScreen (ILjava/lang/String;ZLkotlin/jvm/functions/Function1;)V
+	public static synthetic fun registerScreen$default (Lcom/lvgl/android/ui/LvglUi;ILjava/lang/String;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public final fun setListener (Lcom/lvgl/android/ui/LvglUiListener;)V
+	public final fun unregisterScreen (I)V
+	public final fun updateNode (ILjava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Boolean;Ljava/lang/Boolean;)V
+	public static synthetic fun updateNode$default (Lcom/lvgl/android/ui/LvglUi;ILjava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Boolean;Ljava/lang/Boolean;ILjava/lang/Object;)V
+}
+
+public abstract class com/lvgl/android/ui/LvglUiEvent {
+	public abstract fun getNodeId ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglUiEvent$Click : com/lvgl/android/ui/LvglUiEvent {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/lvgl/android/ui/LvglUiEvent$Click;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglUiEvent$Click;Ljava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglUiEvent$Click;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getNodeId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglUiEvent$Selected : com/lvgl/android/ui/LvglUiEvent {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/lvgl/android/ui/LvglUiEvent$Selected;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglUiEvent$Selected;Ljava/lang/String;IILjava/lang/Object;)Lcom/lvgl/android/ui/LvglUiEvent$Selected;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIndex ()I
+	public fun getNodeId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglUiEvent$Toggled : com/lvgl/android/ui/LvglUiEvent {
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lcom/lvgl/android/ui/LvglUiEvent$Toggled;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglUiEvent$Toggled;Ljava/lang/String;ZILjava/lang/Object;)Lcom/lvgl/android/ui/LvglUiEvent$Toggled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChecked ()Z
+	public fun getNodeId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/lvgl/android/ui/LvglUiEvent$ValueChanged : com/lvgl/android/ui/LvglUiEvent {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/lvgl/android/ui/LvglUiEvent$ValueChanged;
+	public static synthetic fun copy$default (Lcom/lvgl/android/ui/LvglUiEvent$ValueChanged;Ljava/lang/String;IILjava/lang/Object;)Lcom/lvgl/android/ui/LvglUiEvent$ValueChanged;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getNodeId ()Ljava/lang/String;
+	public final fun getValue ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/lvgl/android/ui/LvglUiEventReceiver {
+	public abstract fun onUiEvent (ILjava/lang/String;Ljava/lang/String;I)V
+}
+
+public abstract interface class com/lvgl/android/ui/LvglUiListener {
+	public abstract fun onUiEvent (ILcom/lvgl/android/ui/LvglUiEvent;)V
+}
+
+public final class com/lvgl/android/ui/LvglUiScope {
+	public final fun arc (IILjava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Arc;
+	public static synthetic fun arc$default (Lcom/lvgl/android/ui/LvglUiScope;IILjava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Arc;
+	public final fun button (Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLjava/lang/String;Lkotlin/jvm/functions/Function0;)Lcom/lvgl/android/ui/LvglNode$Button;
+	public static synthetic fun button$default (Lcom/lvgl/android/ui/LvglUiScope;Ljava/lang/String;Lcom/lvgl/android/ui/LvglButtonStyle;ZZLjava/lang/String;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Button;
+	public final fun checkbox (Ljava/lang/String;ZLjava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Checkbox;
+	public static synthetic fun checkbox$default (Lcom/lvgl/android/ui/LvglUiScope;Ljava/lang/String;ZLjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Checkbox;
+	public final fun column (ZIILkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Column;
+	public static synthetic fun column$default (Lcom/lvgl/android/ui/LvglUiScope;ZIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Column;
+	public final fun divider (Ljava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Divider;
+	public static synthetic fun divider$default (Lcom/lvgl/android/ui/LvglUiScope;Ljava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Divider;
+	public final fun dropdown (Ljava/util/List;ILjava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Dropdown;
+	public static synthetic fun dropdown$default (Lcom/lvgl/android/ui/LvglUiScope;Ljava/util/List;ILjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Dropdown;
+	public final fun label (Ljava/lang/String;ILjava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Label;
+	public static synthetic fun label$default (Lcom/lvgl/android/ui/LvglUiScope;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Label;
+	public final fun progress (IILjava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Progress;
+	public static synthetic fun progress$default (Lcom/lvgl/android/ui/LvglUiScope;IILjava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Progress;
+	public final fun row (ZIILkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Row;
+	public static synthetic fun row$default (Lcom/lvgl/android/ui/LvglUiScope;ZIILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Row;
+	public final fun slider (IIILjava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Slider;
+	public static synthetic fun slider$default (Lcom/lvgl/android/ui/LvglUiScope;IIILjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Slider;
+	public final fun spacer (ILjava/lang/String;)Lcom/lvgl/android/ui/LvglNode$Spacer;
+	public static synthetic fun spacer$default (Lcom/lvgl/android/ui/LvglUiScope;ILjava/lang/String;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Spacer;
+	public final fun toggle (ZLjava/lang/String;Lkotlin/jvm/functions/Function1;)Lcom/lvgl/android/ui/LvglNode$Switch;
+	public static synthetic fun toggle$default (Lcom/lvgl/android/ui/LvglUiScope;ZLjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/lvgl/android/ui/LvglNode$Switch;
+}
+
+public final class com/lvgl/android/util/LvglLog {
+	public static final field INSTANCE Lcom/lvgl/android/util/LvglLog;
+	public final fun d (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun e (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun e (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public final fun getLevel ()I
+	public final fun i (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun setLevel (I)V
+	public final fun w (Ljava/lang/String;Ljava/lang/String;)V
+}
+
+public class com/lvgl/android/view/LvglSurfaceView : android/view/SurfaceView, android/view/SurfaceHolder$Callback {
+	public static final field Companion Lcom/lvgl/android/view/LvglSurfaceView$Companion;
+	public fun <init> (Landroid/content/Context;)V
+	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;)V
+	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;I)V
+	public synthetic fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun destroy ()V
+	public final fun onPause ()V
+	public final fun onResume ()V
+	public fun onTouchEvent (Landroid/view/MotionEvent;)Z
+	public fun surfaceChanged (Landroid/view/SurfaceHolder;III)V
+	public fun surfaceCreated (Landroid/view/SurfaceHolder;)V
+	public fun surfaceDestroyed (Landroid/view/SurfaceHolder;)V
+}
+
+public final class com/lvgl/android/view/LvglSurfaceView$Companion {
+}
+
+public class com/lvgl/android/view/LvglSurfaceViewWithGestures : com/lvgl/android/view/LvglSurfaceView {
+	public fun <init> (Landroid/content/Context;)V
+	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;)V
+	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;I)V
+	public synthetic fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getLastGestureResult ()Lcom/lvgl/android/input/Gestures;
+	public fun onTouchEvent (Landroid/view/MotionEvent;)Z
+}
+
+public final class com/lvgl/android/window/MultiWindowManager {
+	public static final field Companion Lcom/lvgl/android/window/MultiWindowManager$Companion;
+	public fun <init> (Landroid/app/Activity;)V
+	public final fun enterPictureInPictureMode (Lkotlin/Pair;)V
+	public static synthetic fun enterPictureInPictureMode$default (Lcom/lvgl/android/window/MultiWindowManager;Lkotlin/Pair;ILjava/lang/Object;)V
+	public final fun isInMultiWindowMode ()Z
+	public final fun isInPictureInPictureMode ()Z
+	public final fun isMultiWindowSupported ()Z
+	public final fun isResumed ()Z
+	public final fun onMultiWindowModeChanged (Z)V
+	public final fun onPaused ()V
+	public final fun onPictureInPictureModeChanged (Z)V
+	public final fun onResumed ()V
+}
+
+public final class com/lvgl/android/window/MultiWindowManager$Companion {
+}
+

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 LVGL Android Framework Contributors
+// Copyright (c) 2026 LVGL Android Framework Contributors
 // SPDX-License-Identifier: MIT
 //
 // This file is part of the LVGL Android Framework.
@@ -16,6 +16,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.lvgl.android.config.DisplayMetricsManager
 import com.lvgl.android.engine.LvglEngine
+import com.lvgl.android.system.LvglDeviceInfo
+import com.lvgl.android.system.LvglSystemControl
 import com.lvgl.android.theme.MaterialTheme
 import com.lvgl.android.view.LvglSurfaceView
 
@@ -49,8 +51,34 @@ abstract class LvglActivity : AppCompatActivity(),
     private var lvglScreenId = NO_SCREEN
     private var firstResume = true
 
+    /**
+     * This activity's navigation bridge. Stored so [onResume] can restore it
+     * after a child activity was destroyed (a destroyed child sets the engine's
+     * navigator to null, which would otherwise leave the dashboard dead).
+     * @breadcrumb BC-025
+     */
+    private var navigator: LvglEngine.ScreenNavigator? = null
+
     /** Subclasses build their LVGL screen here, typically by calling setLvglScreen(). */
     abstract fun onCreateLvgl()
+
+    /**
+     * Hide the Android system bars so the LVGL UI can draw its own status bar
+     * (the M5Tab5-style dashboard look). The reference device has no system
+     * bar; duplicating it would waste a row of content on every screen.
+     */
+    protected open var immersiveMode: Boolean = true
+
+    protected open fun applyImmersiveMode() {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = if (immersiveMode) {
+            (android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
+        } else {
+            android.view.View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
 
     /** Requests an LVGL screen and remembers it for the next onResume. */
     protected fun setLvglScreen(screenId: Int) {
@@ -58,7 +86,26 @@ abstract class LvglActivity : AppCompatActivity(),
         LvglEngine.instance.setScreen(screenId)
     }
 
+    /** Pushes the real device facts so the dashboard map reflects this device. */
+    private fun pushDeviceInfo() {
+        val info = LvglDeviceInfo.collect(this)
+        LvglEngine.instance.setDeviceInfo(
+            info.manufacturer, info.model, info.soc, info.memory, info.storage,
+            info.display, info.androidVersion, info.cameras, info.sensors
+        )
+    }
+
+    /**
+     * Called after the Material palette has been re-applied to LVGL (system
+     * dark/light change, or [com.lvgl.android.theme.MaterialTheme.toggleDarkMode]).
+     * The palette is already updated; override to update Android views.
+     */
     open fun onLvglThemeChanged(theme: MaterialTheme) {}
+
+    /**
+     * Called after the display metrics changed (rotation, density, window size).
+     * The metrics object is already updated.
+     */
     open fun onLvglMetricsChanged(metrics: DisplayMetricsManager) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,17 +142,17 @@ abstract class LvglActivity : AppCompatActivity(),
          * LVGL display is up (surfaceChanged drives the actual apply). */
         engine.applyTheme(
             MaterialTheme.instance.isDarkMode,
-            MaterialTheme.instance.primaryColor,
-            MaterialTheme.instance.secondaryColor
+            MaterialTheme.instance.materialPalette()
         )
 
+        applyImmersiveMode()
         applyWindowInsets()
-
+        pushDeviceInfo()
         onCreateLvgl()
 
         /* Register the navigation bridge so native menu taps can start other
          * activities and the LVGL back button can pop this one. */
-        LvglEngine.instance.screenNavigator = object : LvglEngine.ScreenNavigator {
+        navigator = object : LvglEngine.ScreenNavigator {
             override fun navigateTo(screenId: Int) {
                 val target = screenResolver?.invoke(screenId) ?: return
                 startActivity(android.content.Intent(this@LvglActivity, target))
@@ -114,9 +161,35 @@ abstract class LvglActivity : AppCompatActivity(),
             override fun navigateBack() {
                 onBackPressedDispatcher.onBackPressed()
             }
+
+            override fun setBrightness(brightness: Float) {
+                /* Native calls this on the LVGL thread; WindowManager asset
+                 * changes must run on the UI thread. */
+                val percent = (brightness * 100f).toInt()
+                window.decorView.post { LvglSystemControl.applyBrightness(window, percent) }
+            }
+
+            override fun setVolumePercent(percent: Int) {
+                LvglSystemControl.applyVolumePercent(this@LvglActivity, percent)
+            }
+
+            override fun toggleDarkMode() {
+                MaterialTheme.instance.toggleDarkMode(this@LvglActivity)
+            }
         }
+        LvglEngine.instance.screenNavigator = navigator
+
+        /* Seed the dashboard status bar with the current battery state. */
+        LvglEngine.instance.setBatteryLevel(
+            LvglSystemControl.batteryLevel(this),
+            LvglSystemControl.isCharging(this)
+        )
     }
 
+    /**
+     * Process-wide engine singleton. Safe to access from any thread; the native
+     * library is loaded by [initialize], not by this property.
+     */
     companion object {
         private const val TAG = "LvglActivity"
         private const val NO_SCREEN = -1
@@ -144,7 +217,13 @@ abstract class LvglActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume")
+        applyImmersiveMode()
         lvglView?.onResume()
+        /* A child activity that was destroyed cleared the engine's navigator;
+         * restore ours so dashboard taps keep working after returning. */
+        if (LvglEngine.instance.screenNavigator !== navigator) {
+            LvglEngine.instance.screenNavigator = navigator
+        }
         /* The display is shared process-wide, so a returning activity must
          * re-assert its screen — but only when the display is actually showing
          * a different one, to avoid needless rebuilds (and the flicker they
@@ -157,7 +236,12 @@ abstract class LvglActivity : AppCompatActivity(),
         firstResume = false
         /* Re-apply theme in case the system dark mode changed while paused. */
         val theme = MaterialTheme.instance
-        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.primaryColor, theme.secondaryColor)
+        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.materialPalette())
+        /* Refresh the dashboard battery readout in case it changed while paused. */
+        LvglEngine.instance.setBatteryLevel(
+            LvglSystemControl.batteryLevel(this),
+            LvglSystemControl.isCharging(this)
+        )
     }
 
     override fun onPause() {
@@ -169,29 +253,38 @@ abstract class LvglActivity : AppCompatActivity(),
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
-        /* The navigator captures this activity; clear it so a stale activity is
-         * never invoked (or leaked) after destroy. */
-        LvglEngine.instance.screenNavigator = null
+        /* Only clear the engine's navigator while it is still ours. The parent
+         * activity's onResume runs BEFORE this onDestroy and has already
+         * re-registered its own bridge; clearing unconditionally would wipe it
+         * and leave the dashboard unable to navigate. */
+        if (LvglEngine.instance.screenNavigator === navigator) {
+            LvglEngine.instance.screenNavigator = null
+        }
         lvglView?.destroy()
         lvglView = null
         MaterialTheme.instance.removeListener(this)
         displayMetrics.removeListener(this)
     }
 
+    /**
+     * Handles configuration changes (rotation, density, dark mode, window size)
+     * without recreating the activity. The manifest routes those changes here;
+     * the theme and metrics are refreshed and pushed to LVGL.
+     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "onConfigurationChanged")
-        MaterialTheme.instance.onConfigurationChanged(newConfig)
+        MaterialTheme.instance.onConfigurationChanged(this, newConfig)
         /* Refresh density/DPI metrics and notify listeners: the manifest routes
          * config changes here instead of recreating the activity. */
         displayMetrics.onConfigurationChanged(newConfig)
         val theme = MaterialTheme.instance
-        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.primaryColor, theme.secondaryColor)
+        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.materialPalette())
     }
 
     override fun onThemeChanged(theme: MaterialTheme) {
         /* Re-apply the palette immediately when the system dark mode changes. */
-        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.primaryColor, theme.secondaryColor)
+        LvglEngine.instance.applyTheme(theme.isDarkMode, theme.materialPalette())
         onLvglThemeChanged(theme)
     }
 

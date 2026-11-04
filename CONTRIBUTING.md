@@ -23,3 +23,16 @@ licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 - **No duplication**: Single source of truth for each component
 - **No feature removals**: All existing features preserved and enhanced
+
+## Checks
+
+Run the full suite before opening a pull request:
+
+```powershell
+.\gradlew.bat :lvgl-android:testDebugUnitTest :app:testDebugUnitTest :build-logic:test :lvgl-android:apiCheck
+powershell -File tools\dynamic-test.ps1
+```
+
+`PlayComplianceGuardTest` fails the build if a Google Play requirement
+regresses (target API, 64-bit, permissions, privacy policy, licence
+disclosure). See [docs/play-store.md](docs/play-store.md).
