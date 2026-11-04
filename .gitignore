@@ -1,5 +1,10 @@
-# Build outputs
-build/
+# Build outputs. Anchored on purpose: an unanchored `build/` also ignores the
+# Kotlin package directory `com/lvgl/android/build/`.
+/app/build/
+/lvgl-android/build/
+/build-logic/build/
+/template/build/
+/template/app/build/
 .gradle/
 .kotlin/
 .idea/
