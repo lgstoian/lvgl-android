@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Notes
+### Fixed
 
-- No unreleased changes yet. The first public release is [1.0.0](#100---2026-11-04).
+- The CI dynamic job no longer fails on system-process noise. The harness's
+  crash check matched the Bluetooth stack's `Start Timeout Delay` log and its
+  own SIGABRT on the unaccelerated CI emulator; it now fails only on a crash or
+  ANR in the sample app, guarded by `DynamicHarnessGuardTest`. [BC-036]
+- The CI dynamic job installs the universal debug APK via the harness instead
+  of the removed per-ABI `app-debug.apk` path.
 
 ## [1.0.0] - 2026-11-04
 
