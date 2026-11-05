@@ -727,4 +727,54 @@ copied template.
 **Trap**: adding a permission makes `PlayComplianceGuardTest` fail — Play
 requires a policy justification for every permission.
 
+## CI Emulator Session (2026-11-05)
+
+### The CI Emulator Has No Hardware Acceleration
+
+**Fact**: GitHub's `ubuntu-latest` runners do not expose `/dev/kvm`. The
+`android-emulator-runner` logs:
+
+```
+You're running a Linux VM where hardware acceleration is not available.
+...
+disable Linux hardware acceleration: true
+```
+
+The guest is pure software emulation: `connectedDebugAndroidTest` takes about
+9 minutes for 5 tests and the whole `dynamic` job about 25 minutes.
+
+**Consequence**: system processes are starved and crash. The Bluetooth stack
+(`droid.bluetooth`) logs `AdapterState: Start Timeout Delay: 4000` and then
+`Fatal signal 6 (SIGABRT)`. This is environmental noise, not an app defect.
+
+### "Crash/ANR detected in logcat" Was a False Positive
+
+**Problem**: `tools/dynamic-test.ps1` failed the CI walk with
+`Crash/ANR detected in logcat`, although the same walk passed locally and the
+app had not crashed.
+
+**Root Cause**: the pattern `FATAL|SIGSEGV|JNI DETECTED ERROR|start timeout|ANR in com\.lvgl`
+is case-insensitive and matched the Bluetooth stack's
+`Start Timeout Delay: 4000` and its `Fatal signal 6 (SIGABRT)` in
+`pid 3585 (droid.bluetooth)`.
+
+**Fix**: match only lines that name the sample app — `ANR in com.lvgl.sample`,
+a native tombstone (`>>> com.lvgl.sample <<<`), a Java crash
+(`Process: com.lvgl.sample, PID:`) or `pid NNN (com.lvgl.sample)`.
+`DynamicHarnessGuardTest` and `GuardRules.detectUnscopedCrashPattern` keep the
+pattern honest. See BC-036.
+
+**Trap**: never widen the pattern to bare `FATAL`, `SIGSEGV` or
+`start timeout` — they match system-process noise on an unaccelerated emulator.
+
+### Screenshot Coordinates Must Come From the Device, Not the Preview
+
+**Fact**: the review pane scales screenshots, so a coordinate read off a
+screenshot misses the target. Probe by pixel analysis instead — find the rows
+containing the widget's fill colour, then tap the device coordinate
+(`adb shell wm size`).
+
+**Note**: `input swipe X Y X Y 250` is enough for LVGL (the touch callback holds
+PRESSED until polled), but use 400 ms to be safe.
+
 
