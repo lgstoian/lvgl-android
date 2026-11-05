@@ -767,6 +767,25 @@ pattern honest. See BC-036.
 **Trap**: never widen the pattern to bare `FATAL`, `SIGSEGV` or
 `start timeout` — they match system-process noise on an unaccelerated emulator.
 
+### The Emulator Sometimes Comes Up Offline
+
+**Problem**: occasionally the `dynamic` job fails straight away with
+`ERROR | Unable to connect to adb daemon on port: 5037` followed by
+`adb: device offline` for the rest of the run; `connectedDebugAndroidTest` then
+fails with "There were failing tests".
+
+**Root Cause**: the runner has no KVM (`ProbeKVM: This user doesn't have
+permissions to use KVM (/dev/kvm)`), so x86_64 emulation is software-only and
+the emulator sometimes never reaches the host adb daemon.
+
+**Fix**: the CI `dynamic` script restarts the emulator (`adb emu kill`, then a
+`pkill` fallback, then a fresh boot) and retries the whole sequence up to three
+times. A failure on a *healthy* device is never retried — that is a real test
+failure.
+
+**Trap**: do not "fix" this by ignoring `connectedDebugAndroidTest` failures; a
+device that is offline is not a test result.
+
 ### Screenshot Coordinates Must Come From the Device, Not the Preview
 
 **Fact**: the review pane scales screenshots, so a coordinate read off a

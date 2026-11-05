@@ -135,7 +135,11 @@ jobs:
           restart_emulator() {
             echo "=== restarting the emulator"
             adb emu kill >/dev/null 2>&1 || true
-            sleep 15
+            sleep 5
+            # adb emu kill needs a working adb channel; fall back to signalling
+            # the emulator process so port 5554 is released for the next boot.
+            pkill -f "emulator.*-avd test" >/dev/null 2>&1 || true
+            sleep 10
             nohup "$emulator" -avd test -no-window -gpu swiftshader_indirect \
               -no-snapshot -noaudio -no-boot-anim >/dev/null 2>&1 &
             adb wait-for-device || true
