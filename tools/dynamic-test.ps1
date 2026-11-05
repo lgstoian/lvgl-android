@@ -26,7 +26,9 @@ $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ApkPath) { $ApkPath = Join-Path $RepoRoot "app/build/outputs/apk/debug/app-universal-debug.apk" }
 $ScreenshotDir = Join-Path $RepoRoot $ScreenshotDir
 
-$isWindows = ($IsWindows -or ($env:OS -eq "Windows_NT"))
+# $IsWindows is a read-only automatic variable in PowerShell 7; assigning to it
+# raises a non-terminating error on Linux runners. Derive it instead.
+$isWindows = ($PSVersionTable.Platform -eq 'Win32NT') -or ($env:OS -eq 'Windows_NT')
 $adbName = if ($isWindows) { "adb.exe" } else { "adb" }
 $adb = if ($env:ANDROID_HOME) { Join-Path $env:ANDROID_HOME "platform-tools/$adbName" } else { $adbName }
 $gradlew = if ($isWindows) { ".\gradlew.bat" } else { "./gradlew" }
@@ -78,6 +80,11 @@ New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
 $install = Invoke-Native { & $adb install -r $ApkPath 2>&1 }
 if ("$install" -notmatch "Success") { Fatal "adb install failed: $install" }
 
+# Grant the optional CAMERA permission up front. Without it the camera sample
+# pops a runtime permission dialog in the middle of the walk, which pauses the
+# app and derails the screen sequence.
+Invoke-Native { & $adb shell pm grant com.lvgl.sample android.permission.CAMERA 2>&1 | Out-Null }
+
 function Start-Activity($component) {
     $out = Invoke-Native { & $adb shell am start -n $component 2>&1 }
     if ("$out" -notmatch "Starting:") { Fail "am start failed for $component : $out" }
@@ -114,8 +121,24 @@ Invoke-Native { & $adb pull /sdcard/showcase-window.png (Join-Path $ScreenshotDi
 $logFile = Join-Path $ScreenshotDir "logcat.txt"
 Invoke-Native { & $adb logcat -d 2>&1 | Out-File -FilePath $logFile }
 $log = Get-Content $logFile -Raw
-if ($log -match "FATAL|SIGSEGV|JNI DETECTED ERROR|start timeout|ANR in com\.lvgl") {
-    Fail "Crash/ANR detected in logcat"
+$crashPattern = "FATAL|SIGSEGV|JNI DETECTED ERROR|start timeout|ANR in com\.lvgl"
+$lines = $log.ToString().Split("`n")
+$hits = @()
+for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match $crashPattern) { $hits += $i }
+}
+if ($hits.Count -gt 0) {
+    Write-Host "Crash/ANR lines from logcat ($($hits.Count) matching lines, first 4 with context):"
+    $shown = @{}
+    foreach ($i in ($hits | Select-Object -First 4)) {
+        $from = [Math]::Max(0, $i - 4)
+        $to = [Math]::Min($lines.Count - 1, $i + 8)
+        for ($j = $from; $j -le $to; $j++) {
+            if (-not $shown.ContainsKey($j)) { Write-Host "  $($lines[$j])"; $shown[$j] = $true }
+        }
+        Write-Host "  ---"
+    }
+    Fail "Crash/ANR detected in logcat ($($hits.Count) matching lines)"
 }
 if ($log -notmatch "LVGL initialised") { Fail "LVGL did not initialise" }
 if ($log -notmatch "Showcase built: 4 tiles") { Fail "Showcase screen did not build its tiles" }
