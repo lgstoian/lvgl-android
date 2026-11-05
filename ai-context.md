@@ -767,6 +767,18 @@ pattern honest. See BC-036.
 **Trap**: never widen the pattern to bare `FATAL`, `SIGSEGV` or
 `start timeout` — they match system-process noise on an unaccelerated emulator.
 
+### android-emulator-runner Executes the Script Line by Line
+
+**Fact**: the `reactivecircus/android-emulator-runner` `script` input is run one
+line at a time, each as a separate `sh -c` — the log shows
+`[command]/usr/bin/sh -c <line>` for every line. Multi-line constructs (shell
+functions, `for`/`while` loops, `if` blocks) are split apart and fail with
+`Syntax error: end of file unexpected (expecting "}")`.
+
+**Fix**: keep the workflow `script` to a single line and put any multi-line
+logic in a script file — see `tools/ci-dynamic.sh`, called as
+`script: sh tools/ci-dynamic.sh`.
+
 ### The Emulator Sometimes Comes Up Offline
 
 **Problem**: occasionally the `dynamic` job fails straight away with
