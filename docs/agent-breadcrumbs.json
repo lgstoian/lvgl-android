@@ -700,6 +700,34 @@
         "Do not remove the licence disclosure or the privacy policy."
       ],
       "ai_hint": "Run PlayComplianceGuardTest before a release; it fails the build on a Play regression."
+    },
+    {
+      "id": "BC-036",
+      "title": "App-scoped crash detection in the dynamic harness",
+      "decision": "tools/dynamic-test.ps1 fails the CI walk only on a crash or ANR whose log line names the sample app: an ANR in com.lvgl.sample, a native tombstone for the app, or a Java crash in the app process.",
+      "rationale": "The CI emulator has no hardware acceleration, so system processes are starved and noisy: the Bluetooth stack logs 'AdapterState: Start Timeout Delay: 4000' and then SIGABRTs in its own process. The previous broad pattern (FATAL, SIGSEGV, JNI DETECTED ERROR, start timeout) matched that noise and failed an otherwise healthy walk.",
+      "consequences": [
+        "DynamicHarnessGuardTest extracts the harness pattern and proves it ignores system-process noise while still detecting app ANRs, Java crashes and native tombstones.",
+        "GuardRules.detectUnscopedCrashPattern flags broad markers, with canaries in GuardCanaryTest."
+      ],
+      "files": [
+        "tools/dynamic-test.ps1",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/DynamicHarnessGuardTest.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/GuardRules.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/GuardCanaryTest.kt"
+      ],
+      "symbols": [
+        "DynamicHarnessGuardTest",
+        "GuardRules.detectUnscopedCrashPattern",
+        "GuardRules.dynamicHarnessCrashPattern",
+        "dynamic-test.ps1"
+      ],
+      "see_also": ["BC-014", "BC-017"],
+      "do_not": [
+        "Do not widen the crash pattern to bare FATAL, SIGSEGV or 'start timeout'; they match system-process noise.",
+        "Do not drop the app-scoped markers; the walk must still fail on a real app crash."
+      ],
+      "ai_hint": "If the CI dynamic job fails with 'Crash/ANR detected in logcat', read the printed logcat lines before changing app code - they are usually system-process noise."
     }
   ]
 }

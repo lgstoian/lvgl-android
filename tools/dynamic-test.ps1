@@ -7,7 +7,7 @@
     Builds the debug APK, boots the emulator (if needed), installs the app,
     walks every sample screen, taps a showcase tile, captures screenshots +
     logcat, and asserts:
-      - no FATAL / SIGSEGV / JNI error / ANR across the whole walk
+      - no crash or ANR in the sample app across the whole walk
       - every Activity launched successfully
       - LVGL initialised and the showcase screen built its tiles
     Exits non-zero on any failure so it can gate CI.
@@ -121,7 +121,13 @@ Invoke-Native { & $adb pull /sdcard/showcase-window.png (Join-Path $ScreenshotDi
 $logFile = Join-Path $ScreenshotDir "logcat.txt"
 Invoke-Native { & $adb logcat -d 2>&1 | Out-File -FilePath $logFile }
 $log = Get-Content $logFile -Raw
-$crashPattern = "FATAL|SIGSEGV|JNI DETECTED ERROR|start timeout|ANR in com\.lvgl"
+# Only a crash or ANR *in the sample app* is a failure. Broad markers such as
+# "FATAL" or "start timeout" also match system-process noise on an
+# unaccelerated CI emulator - the Bluetooth stack logs
+# "AdapterState: Start Timeout Delay: 4000" and then SIGABRTs in its own
+# process, which is not an app defect and failed an otherwise healthy walk.
+# DynamicHarnessGuardTest keeps this pattern honest.
+$crashPattern = 'ANR in com\.lvgl\.sample|>>> com\.lvgl\.sample <<<|Process: com\.lvgl\.sample, PID|pid \d+ \(com\.lvgl\.sample\)'
 $lines = $log.ToString().Split("`n")
 $hits = @()
 for ($i = 0; $i -lt $lines.Count; $i++) {

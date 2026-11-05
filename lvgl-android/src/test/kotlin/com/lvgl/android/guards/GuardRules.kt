@@ -13,10 +13,12 @@ import com.lvgl.android.annotations.SourceComments
  * detector both catches a violation and ignores a clean fixture.
  *
  * @breadcrumb BC-014
+ * @breadcrumb BC-036
  * @guard-rule rule=no-set-content-view test=HardRuleGuardTest
  * @guard-rule rule=all-app-types test=HardRuleGuardTest
  * @guard-rule rule=no-hardcoded-strings test=HardRuleGuardTest
  * @guard-rule rule=demo-ui-single-source test=HardRuleGuardTest
+ * @guard-rule rule=dynamic-harness-crash-detection test=DynamicHarnessGuardTest
  */
 object GuardRules {
 
@@ -31,6 +33,7 @@ object GuardRules {
         "guard-canary",
         "layout-lint",
         "play-compliance",
+        "dynamic-harness-crash-detection",
     )
 
     data class Violation(
@@ -140,6 +143,47 @@ object GuardRules {
         }
         return out
     }
+
+    /**
+     * Extract the crash regex from the dynamic harness script, or null when the
+     * script does not define `$crashPattern`.
+     */
+    fun dynamicHarnessCrashPattern(harness: String): String? =
+        Regex("""\bcrashPattern\s*=\s*'([^']+)'""").find(harness)?.groupValues?.get(1)
+
+    /**
+     * Detect a crash pattern that is not scoped to the sample app.
+     *
+     * Broad markers ("FATAL", "start timeout", bare "SIGSEGV") also match
+     * system-process noise on an unaccelerated CI emulator: the Bluetooth stack
+     * logs "AdapterState: Start Timeout Delay: 4000" and then SIGABRTs in its own
+     * process, which failed an otherwise healthy walk (BC-036).
+     */
+    fun detectUnscopedCrashPattern(harness: String): List<Violation> {
+        val pattern = dynamicHarnessCrashPattern(harness)
+            ?: return listOf(
+                Violation(
+                    file = "tools/dynamic-test.ps1",
+                    line = 0,
+                    text = "\$crashPattern",
+                    reason = "harness must define the crash pattern"
+                )
+            )
+        val broad = BROAD_CRASH_MARKERS.filter { it in pattern }
+        if (broad.isEmpty()) return emptyList()
+        return listOf(
+            Violation(
+                file = "tools/dynamic-test.ps1",
+                line = 0,
+                text = pattern,
+                reason = "crash pattern must be scoped to com.lvgl.sample; " +
+                    "broad markers match system-process noise: ${broad.joinToString(", ")}"
+            )
+        )
+    }
+
+    /** Markers that also match system-process noise; never scope a crash check with these. */
+    private val BROAD_CRASH_MARKERS = listOf("start timeout", "FATAL|", "|FATAL", "SIGSEGV")
 
     /** Framework components that must never be removed (no feature removals). */
     val requiredFeatures: Map<String, String> = mapOf(

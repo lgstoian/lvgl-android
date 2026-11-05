@@ -143,6 +143,38 @@ class GuardCanaryTest {
         assertTrue("Canary failed: detector must ignore a clean split", hits.isEmpty())
     }
 
+    // ---- dynamic harness crash pattern detector ---------------------------
+
+    @Test
+    fun unscopedCrashPatternDetectorCatchesBroadMarkers() {
+        val broad = "\$crashPattern = 'FATAL|SIGSEGV|start timeout|ANR in com\\.lvgl'"
+        assertTrue(
+            "Canary failed: detector must catch a broad crash pattern",
+            GuardRules.detectUnscopedCrashPattern(broad).isNotEmpty()
+        )
+    }
+
+    @Test
+    fun unscopedCrashPatternDetectorIgnoresAppScopedPattern() {
+        val appScoped = "\$crashPattern = 'ANR in com\\.lvgl\\.sample|>>> com\\.lvgl\\.sample <<<'"
+        assertTrue(
+            "Canary failed: detector must ignore an app-scoped crash pattern",
+            GuardRules.detectUnscopedCrashPattern(appScoped).isEmpty()
+        )
+    }
+
+    @Test
+    fun dynamicHarnessCrashPatternRequiresDefinition() {
+        assertNull(
+            "Canary failed: a missing pattern must extract as null",
+            GuardRules.dynamicHarnessCrashPattern("# no pattern here")
+        )
+        assertTrue(
+            "Canary failed: a missing pattern must be reported",
+            GuardRules.detectUnscopedCrashPattern("# no pattern here").isNotEmpty()
+        )
+    }
+
     // ---- annotation parser ------------------------------------------------
 
     @Test
