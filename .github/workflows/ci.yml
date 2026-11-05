@@ -113,10 +113,54 @@ jobs:
         arch: x86_64
         profile: pixel_5
         script: |
-          adb logcat -c
           chmod +x gradlew
-          ./gradlew assembleDebug :lvgl-android:connectedDebugAndroidTest --no-daemon
-          pwsh ./tools/dynamic-test.ps1
+
+          # The CI emulator has no KVM (software emulation only) and sometimes
+          # comes up offline: the emulator cannot reach the host adb daemon and
+          # the device stays "offline" for the rest of the job. Retry the whole
+          # dynamic sequence when the device is unhealthy; a real failure on a
+          # healthy device is never retried.
+          emulator="$ANDROID_SDK_ROOT/emulator/emulator"
+
+          wait_for_boot() {
+            for _ in $(seq 1 120); do
+              if adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          restart_emulator() {
+            echo "=== restarting the emulator"
+            adb emu kill >/dev/null 2>&1 || true
+            sleep 15
+            nohup "$emulator" -avd test -no-window -gpu swiftshader_indirect \
+              -no-snapshot -noaudio -no-boot-anim >/dev/null 2>&1 &
+            adb wait-for-device || true
+            wait_for_boot || true
+          }
+
+          for attempt in 1 2 3; do
+            echo "=== dynamic attempt $attempt/3 ==="
+            adb logcat -c || true
+            if ./gradlew :lvgl-android:connectedDebugAndroidTest --no-daemon &&
+               pwsh ./tools/dynamic-test.ps1; then
+              echo "=== dynamic checks passed on attempt $attempt"
+              exit 0
+            fi
+            echo "=== attempt $attempt failed"
+            state="$(adb devices | awk '/emulator-/ {print $2; exit}')"
+            if [ -n "$state" ] && [ "$state" = "device" ]; then
+              echo "=== device is healthy; this is a real failure, not an emulator flake"
+              exit 1
+            fi
+            echo "=== device state: '${state:-missing}'; recovering"
+            restart_emulator
+          done
+          echo "=== dynamic checks failed after 3 attempts"
+          exit 1
     - name: Upload dynamic-test logs
       uses: actions/upload-artifact@v4
       if: failure()
