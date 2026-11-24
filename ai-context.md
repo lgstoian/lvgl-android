@@ -767,6 +767,21 @@ pattern honest. See BC-036.
 **Trap**: never widen the pattern to bare `FATAL`, `SIGSEGV` or
 `start timeout` — they match system-process noise on an unaccelerated emulator.
 
+### `$isWindows` Collides With PowerShell 7's Read-Only `$IsWindows`
+
+**Problem**: the dynamic harness passed locally on Windows PowerShell 5.1 but
+failed on CI's `pwsh` with `Cannot overwrite variable IsWindows because it is
+read-only or constant.` at the top of the script.
+
+**Root Cause**: PowerShell variables are case-insensitive. Even though the
+source assigned `$isWindows`, that is the same variable as the automatic,
+read-only `$IsWindows` on PowerShell 7.
+
+**Fix**: derive a distinctly named variable, e.g. `$runningOnWindows`, and use
+it for the adb/aapt/gradlew executable names.
+
+**Trap**: a green local Windows PowerShell run does not prove `pwsh` compatibility.
+
 ### The Runner's Emulator Refuses `-accel off` Without a TCG Opt-In
 
 **Problem**: on `ubuntu-latest` the Release smoke and the dynamic job timed out

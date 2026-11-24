@@ -36,12 +36,13 @@ param(
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 
-# $IsWindows is a read-only automatic variable in PowerShell 7; assigning to it
-# raises a non-terminating error on Linux runners. Derive it instead.
-$isWindows = ($PSVersionTable.Platform -eq 'Win32NT') -or ($env:OS -eq 'Windows_NT')
-$adbName = if ($isWindows) { "adb.exe" } else { "adb" }
+# $IsWindows is a read-only automatic variable in PowerShell 7, and PowerShell
+# variables are case-insensitive: assigning to $isWindows also fails on Linux.
+# Derive a distinctly named variable instead.
+$runningOnWindows = ($PSVersionTable.Platform -eq 'Win32NT') -or ($env:OS -eq 'Windows_NT')
+$adbName = if ($runningOnWindows) { "adb.exe" } else { "adb" }
 $adb = if ($env:ANDROID_HOME) { Join-Path $env:ANDROID_HOME "platform-tools/$adbName" } else { $adbName }
-$gradlew = if ($isWindows) { ".\gradlew.bat" } else { "./gradlew" }
+$gradlew = if ($runningOnWindows) { ".\gradlew.bat" } else { "./gradlew" }
 
 $Script:Failures = @()
 function Fail($msg) { $Script:Failures += $msg; Write-Host "FAIL: $msg" -ForegroundColor Red }
@@ -102,7 +103,7 @@ if (-not (Test-Path $ApkPath)) {
 if (-not (Test-Path $ApkPath)) { Fatal "APK not produced: $ApkPath" }
 
 function Get-ApkVersionName([string]$apk) {
-    $aaptName = if ($isWindows) { "aapt.exe" } else { "aapt" }
+    $aaptName = if ($runningOnWindows) { "aapt.exe" } else { "aapt" }
     $aapt = $null
     if ($env:ANDROID_HOME) {
         $aapt = Get-ChildItem (Join-Path $env:ANDROID_HOME "build-tools") -Recurse -File `
@@ -139,14 +140,18 @@ if ("$dev" -notmatch "emulator-\d+\s+device") {
 
 # --- Install & launch ---
 New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
-$install = Invoke-Native { & $adb install -r $ApkPath 2>&1 }
-if ("$install" -notmatch "Success" -and
-    "$install" -match "signature|SIGNATURE|UPDATE_INCOMPATIBLE|VERSION_DOWNGRADE") {
-    # A debug-signed APK from the full walk cannot be updated in place by the
-    # release-signed artifact. Replace it rather than failing a healthy device.
-    Write-Host "==> Stale install with a different signature; uninstalling and retrying"
-    Invoke-Native { & $adb uninstall com.lvgl.sample 2>&1 | Out-Null }
+# On the unaccelerated CI emulator `adb install` occasionally returns a broken
+# pipe while the package service is busy. Retry a healthy device rather than
+# reporting a false app failure; a signature mismatch still forces a reinstall.
+$install = ""
+for ($installAttempt = 1; $installAttempt -le 3; $installAttempt++) {
     $install = Invoke-Native { & $adb install -r $ApkPath 2>&1 }
+    if ("$install" -match "Success") { break }
+    Write-Host "==> install attempt $installAttempt failed; retrying: $install"
+    if ("$install" -match "signature|SIGNATURE|UPDATE_INCOMPATIBLE|VERSION_DOWNGRADE") {
+        Invoke-Native { & $adb uninstall com.lvgl.sample 2>&1 | Out-Null }
+    }
+    Start-Sleep -Seconds 5
 }
 if ("$install" -notmatch "Success") { Fatal "adb install failed: $install" }
 
