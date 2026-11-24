@@ -5,8 +5,6 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.android.guards
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -14,10 +12,11 @@ import java.io.File
 /**
  * Machine-checkable Google Play readiness rules.
  *
- * Each test maps to a published Play requirement so a regression fails the build
- * instead of being caught at review time.
+ * Every rule is detected by [GuardRules.detectPlayComplianceViolations], the
+ * same pure function the canary suite exercises with broken and clean fixtures.
  *
  * @breadcrumb BC-035
+ * @breadcrumb BC-037
  * @guard-rule rule=play-compliance test=PlayComplianceGuardTest
  */
 class PlayComplianceGuardTest {
@@ -32,93 +31,106 @@ class PlayComplianceGuardTest {
             .firstOrNull { File(it, "app/src/main/java").isDirectory }
             ?: File("..").absoluteFile
 
+    private fun violations(): List<GuardRules.Violation> {
+        assertTrue("app/build.gradle.kts must exist", appBuild.isFile)
+        assertTrue("AndroidManifest.xml must exist", manifest.isFile)
+        assertTrue("strings.xml must exist", strings.isFile)
+        val paths = listOf(
+            "app/src/main/res/xml/backup_rules.xml",
+            "app/src/main/res/xml/data_extraction_rules.xml",
+            "app/src/main/res/xml/locales_config.xml",
+            "PRIVACY.md",
+            "docs/play-store.md",
+            "app/src/main/java/com/lvgl/sample/LicensesActivity.kt",
+        )
+        val repoFiles = paths.associateWith { path ->
+            val file = File(repoRoot, path)
+            if (file.isFile) file.readText() else ""
+        }
+        return GuardRules.detectPlayComplianceViolations(
+            appBuildText = appBuild.readText(),
+            manifestText = manifest.readText(),
+            stringsText = strings.readText(),
+            repoFiles = repoFiles,
+        )
+    }
+
+    private fun assertNoViolationMatching(part: String) {
+        val hits = violations().filter { part in it.reason }
+        assertTrue(
+            "Play compliance violation '$part':\n" + hits.joinToString("\n") { it.reason },
+            hits.isEmpty(),
+        )
+    }
+
+    @Test
+    fun playComplianceDetectorPassesTheRepo() {
+        val hits = violations()
+        assertTrue(
+            "Play compliance violations:\n" + hits.joinToString("\n") { "${it.file}: ${it.reason}" },
+            hits.isEmpty(),
+        )
+    }
+
     @Test
     fun targetsCurrentApiLevel() {
-        val text = appBuild.readText()
-        val target = Regex("""targetSdk\s*=\s*(\d+)""")
-            .find(text)?.groupValues?.get(1)?.toIntOrNull()
-        assertNotNull("targetSdk must be set in app/build.gradle.kts", target)
-        assertTrue("Google Play requires targetSdk >= 36 (found $target)", target!! >= 36)
+        assertNoViolationMatching("targetSdk")
     }
 
     @Test
     fun ships64BitAbis() {
-        val text = appBuild.readText()
-        assertTrue("arm64-v8a is required", text.contains("arm64-v8a"))
+        assertNoViolationMatching("64-bit ABI")
     }
 
     @Test
     fun releaseBuildIsOptimised() {
-        val text = appBuild.readText()
-        assertTrue("release must enable R8", text.contains("isMinifyEnabled = true"))
-        assertTrue("release must shrink resources", text.contains("isShrinkResources = true"))
+        assertNoViolationMatching("isMinifyEnabled")
+        assertNoViolationMatching("isShrinkResources")
     }
 
     @Test
     fun manifestDeclaresPlayAttributes() {
-        val text = manifest.readText()
-        assertTrue("dataExtractionRules", text.contains("android:dataExtractionRules"))
-        assertTrue("fullBackupContent", text.contains("android:fullBackupContent"))
-        assertTrue("enableOnBackInvokedCallback", text.contains("android:enableOnBackInvokedCallback"))
-        assertTrue("resizeableActivity", text.contains("android:resizeableActivity"))
-        assertTrue("localeConfig", text.contains("android:localeConfig"))
+        listOf(
+            "dataExtractionRules", "fullBackupContent", "enableOnBackInvokedCallback",
+            "resizeableActivity", "localeConfig",
+        ).forEach { assertNoViolationMatching(it) }
     }
 
     @Test
     fun declaresOnlyTheRequiredPermissions() {
-        val permissions = Regex("""<uses-permission[^>]*android:name="([^"]+)\"""")
-            .findAll(manifest.readText())
-            .map { it.groupValues[1] }
-            .toList()
-        assertEquals(
-            "the app must request only the permissions it needs",
-            listOf("android.permission.CAMERA"),
-            permissions,
-        )
+        assertNoViolationMatching("permission.CAMERA")
     }
 
     @Test
     fun declaresQueriesForPackageVisibility() {
-        val text = manifest.readText()
-        assertTrue("<queries> is required by the launcher sample", text.contains("<queries>"))
-        assertTrue("LAUNCHER category is required", text.contains("android.intent.category.LAUNCHER"))
+        assertNoViolationMatching("<queries>")
     }
 
     @Test
     fun mainActivityIsLaunchable() {
-        val block = Regex(
-            """<activity\b[^>]*\bMainActivity\b[^>]*>.*?</activity>""",
-            RegexOption.DOT_MATCHES_ALL,
-        ).find(manifest.readText())?.value ?: ""
-        assertTrue(
-            "MainActivity must declare MAIN/LAUNCHER or the app has no launcher icon",
-            block.contains("android.intent.action.MAIN") &&
-                block.contains("android.intent.category.LAUNCHER"),
-        )
+        assertNoViolationMatching("MainActivity")
+        assertNoViolationMatching("no activities")
+    }
+
+    @Test
+    fun activityExportedFlagsMatchIntentFilters() {
+        assertNoViolationMatching("must be exported")
     }
 
     @Test
     fun backupAndLocaleResourcesExist() {
-        listOf("backup_rules.xml", "data_extraction_rules.xml", "locales_config.xml").forEach { name ->
-            assertTrue("$name must exist", File(repoRoot, "app/src/main/res/xml/$name").isFile)
-        }
+        assertNoViolationMatching("app/src/main/res/xml/")
     }
 
     @Test
     fun privacyPolicyAndPlayChecklistExist() {
-        assertTrue("PRIVACY.md must exist", File(repoRoot, "PRIVACY.md").isFile)
-        assertTrue("docs/play-store.md must exist", File(repoRoot, "docs/play-store.md").isFile)
+        assertNoViolationMatching("PRIVACY.md")
+        assertNoViolationMatching("docs/play-store.md")
     }
 
     @Test
     fun disclosesOpenSourceLicenses() {
-        assertTrue(
-            "licenses_text must exist",
-            strings.readText().contains("name=\"licenses_text\""),
-        )
-        assertTrue(
-            "LicensesActivity must exist",
-            File(repoRoot, "app/src/main/java/com/lvgl/sample/LicensesActivity.kt").isFile,
-        )
+        assertNoViolationMatching("licenses_text")
+        assertNoViolationMatching("LicensesActivity")
     }
 }

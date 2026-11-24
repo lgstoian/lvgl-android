@@ -5,6 +5,7 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.sample
 
+import android.content.Intent
 import android.os.Bundle
 import com.lvgl.android.activity.LvglActivity
 import com.lvgl.android.navigation.LvglNavigation
@@ -43,7 +44,26 @@ class MainActivity : LvglActivity() {
 
     override fun onCreateLvgl() {
         LvglNavigation.setMainActivity(this)
+
+        /* Dynamic harness hook: sample activities are not exported, so shell
+         * `am start` cannot reach them directly. The exported entry point
+         * launches them with an internal explicit Intent instead, which keeps
+         * the real per-activity lifecycle under test. Screen ids reuse the
+         * existing resolver, so there is only one screen-to-activity mapping. */
+        val smokeScreen = intent.getIntExtra(EXTRA_SMOKE_SCREEN, 0)
+        if (smokeScreen != 0) {
+            val target = LvglActivity.screenResolver?.invoke(smokeScreen)
+            if (target != null) {
+                startActivity(Intent(this, target))
+                return
+            }
+        }
+
         LvglNavigation.pushScreen("Dashboard")
         setLvglScreen(0)
+    }
+
+    companion object {
+        const val EXTRA_SMOKE_SCREEN = "SMOKE_SCREEN"
     }
 }

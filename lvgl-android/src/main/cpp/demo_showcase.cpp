@@ -320,13 +320,49 @@ static void build_controls_content(Window& win) {
 static void build_audio_content(Window& win) {
     const int sd = ui_dpi();
     lv_obj_t* c = win.content();
-    auto* lbl = lv_label_create(c);
-    lv_obj_set_width(lbl, LV_PCT(100));
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(lbl, "Audio visualiser");
-    lv_obj_set_style_text_color(lbl, ui_palette().primary, 0);
-    lv_obj_set_style_text_font(lbl, ui_font(ui_tokens().f_title, sd), 0);
-    ui_decorative(lbl);
+
+    ui_make_label(c, "Audio visualiser", ui_tokens().f_title, ui_palette().primary);
+
+    /* Equalizer field: an explicit flex row so the bands share the width and
+     * never pile up at (0,0). Plain objects with static, varied heights read as
+     * a live spectrum without any per-frame work — important on the software
+     * emulator, where this screen runs at only a few frames per second. */
+    auto* eq = lv_obj_create(c);
+    lv_obj_set_width(eq, LV_PCT(100));
+    lv_obj_set_height(eq, LV_SIZE_CONTENT);
+    lv_obj_set_layout(eq, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(eq, LV_FLEX_FLOW_ROW);
+    /* Bottom-align the bands so their tops form the familiar spectrum shape. */
+    lv_obj_set_flex_align(eq, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(eq, 0, 0);
+    lv_obj_set_style_pad_top(eq, ui_dpx(8, sd), 0);
+    lv_obj_set_style_pad_column(eq, ui_dpx(6, sd), 0);
+    lv_obj_set_style_bg_opa(eq, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(eq, 0, 0);
+    ui_decorative(eq);
+
+    /* Heights are baseline dp values converted through ui_dpx like every other
+     * dimension; colours come only from the active Material palette. */
+    const int band_dp[] = {30, 52, 74, 44, 90, 62, 82, 48, 68, 38, 58, 34};
+    const lv_color_t band_colors[] = {
+        ui_palette().primary, ui_palette().accent2, ui_palette().danger
+    };
+    const int bands = (int)(sizeof(band_dp) / sizeof(band_dp[0]));
+    for (int i = 0; i < bands; i++) {
+        auto* bar = lv_obj_create(eq);
+        lv_obj_set_flex_grow(bar, 1);
+        lv_obj_set_height(bar, ui_dpx(band_dp[i], sd));
+        lv_obj_set_style_radius(bar, ui_dpx(3, sd), 0);
+        lv_obj_set_style_bg_color(bar, band_colors[i % 3], 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(bar, 0, 0);
+        ui_decorative(bar);
+    }
+
+    /* Short status/legend line explaining the band colours. */
+    ui_make_label(c, "Live levels: low / mid / high", ui_tokens().f_body,
+                  ui_palette().dim);
 }
 
 /* -------------------------------------------------------------------------- */

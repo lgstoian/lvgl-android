@@ -18,8 +18,9 @@ items are enforced by `PlayComplianceGuardTest`.
 
 - **Requirement**: new apps must be uploaded as an AAB, signed with an upload
   key enrolled in Play App Signing.
-- **Project**: `assembleRelease` + `bundleRelease`; the release workflow signs
-  with the `LVGL_KEYSTORE*` secrets. ✓
+- **Project**: `assembleRelease` builds the APKs, then
+  `bundleRelease -Plvgl.bundleNoSplits=true` builds the AAB that Play receives;
+  the release workflow signs with the `LVGL_KEYSTORE*` secrets. ✓
 
 ## Runtime permissions
 
@@ -75,17 +76,55 @@ items are enforced by `PlayComplianceGuardTest`.
 
 ## Quality
 
-- No crashes or ANRs: `tools/dynamic-test.ps1` walks every screen and fails on
-  `FATAL`, `SIGSEGV`, `JNI DETECTED ERROR` or `ANR`.
+- No crashes or ANRs: `tools/dynamic-test.ps1` walks every screen and fails only
+  when a log line names the sample app — an ANR in `com.lvgl.sample`, a native
+  tombstone (`>>> com.lvgl.sample <<<`), or a Java crash in the app process.
+  Broad markers such as bare `FATAL`, `SIGSEGV` or `start timeout` match
+  system-process noise on the unaccelerated CI emulator and are deliberately not
+  used. `DynamicHarnessGuardTest` and `GuardRules.detectUnscopedCrashPattern`
+  keep the pattern honest. [BC-036]
 - No excessive permissions: only the optional `CAMERA` permission.
+- Minimum attack surface: only `MainActivity` is exported in the shipped
+  manifest; the eight sample activities are `exported="false"` and have no intent
+  filters. [BC-035]
 - No deceptive behaviour: the app does what the listing describes.
+
+## Release artifact verification
+
+The gates operate on what actually ships, not just the debug build: [BC-037]
+
+- **Release smoke**: CI installs and launches the release APK, walks the screens
+  and fails on an app-scoped crash; the release workflow blocks on this smoke.
+  `tools/dynamic-test.ps1 -ApkPath <release APK>` runs the same walk locally.
+- **ABI presence**: `tools/size-report.ps1` fails when an expected per-ABI release
+  APK is missing, in addition to enforcing the size budget. [BC-031]
+- **R8 / JNI survival**: the runtime walk proves native initialisation succeeds
+  after R8 shrinking and repackaging — a debug-only green is not evidence that
+  the shipped artifact starts.
+- **Shipped manifest**: inspect the merged manifest inside the release APK, not
+  just the source, to confirm only the intended activity is exported.
+- **Toolchain alignment**: AGP and Gradle are upgraded so compileSdk/targetSdk 36
+  is officially supported, and a Gradle check fails on an AGP/SDK mismatch.
 
 ## Release checklist
 
 1. `tools/bump-version.ps1 -Version X.Y.Z`
 2. Update `CHANGELOG.md`.
-3. `./gradlew assembleRelease bundleRelease` (signed with the upload key).
-4. `powershell -File tools\dynamic-test.ps1`.
-5. Upload the AAB to the Play Console.
-6. Complete the data-safety form and link [PRIVACY.md](../PRIVACY.md).
-7. Verify the device catalogue (phones, tablets, foldables).
+3. Confirm the AGP/Gradle version officially supports the target API (36) — the
+   Gradle AGP/SDK check must pass, with no mismatch warning.
+4. `./gradlew assembleRelease --no-daemon`, then
+   `./gradlew bundleRelease -Plvgl.bundleNoSplits=true --no-daemon` (signed with
+   the upload key). The bundle step disables ABI splits because `bundleRelease`
+   fails when splits and R8 resource shrinking are both enabled; per-ABI APKs
+   still come from `assembleRelease`, and the AAB is what Play receives.
+5. `powershell -File tools\size-report.ps1` — fails if an expected ABI APK is missing.
+6. `powershell -File tools\dynamic-test.ps1 -ApkPath <release universal APK>` —
+   release smoke; CI and the release workflow block publishing on this step, so
+   a green `assembleRelease` alone does not prove the AAB is shippable.
+7. Inspect the merged manifest inside the shipped release APK: only
+   `MainActivity` may be exported; the eight sample activities are
+   `exported="false"` and are reached through `MainActivity`'s `SMOKE_SCREEN`
+   extra.
+8. Upload the AAB to the Play Console.
+9. Complete the data-safety form and link [PRIVACY.md](../PRIVACY.md).
+10. Verify the device catalogue (phones, tablets, foldables).

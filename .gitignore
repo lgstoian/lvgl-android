@@ -1,5 +1,6 @@
 # Build outputs. Anchored on purpose: an unanchored `build/` also ignores the
 # Kotlin package directory `com/lvgl/android/build/`.
+/build/
 /app/build/
 /lvgl-android/build/
 /build-logic/build/
@@ -23,6 +24,8 @@ Thumbs.db
 # the dynamic-harness output are ignored.
 screenshots/_*.png
 screenshots/dynamic/
+screenshots/audit/
+screenshots/final/*.txt
 !screenshots/.gitkeep
 
 # Temporary

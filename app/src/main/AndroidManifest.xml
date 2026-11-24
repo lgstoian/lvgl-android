@@ -43,21 +43,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".WidgetShowcaseActivity" android:exported="true"
+        <!-- Only MainActivity is a launcher entry point. Every other activity is
+             started with an explicit internal Intent, so it must not be exported. -->
+        <activity android:name=".WidgetShowcaseActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".LayoutShowcaseActivity" android:exported="true"
+        <activity android:name=".LayoutShowcaseActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".InteractiveDemoActivity" android:exported="true"
+        <activity android:name=".InteractiveDemoActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".CameraSampleActivity" android:exported="true"
+        <activity android:name=".CameraSampleActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".GameSampleActivity" android:exported="true"
+        <activity android:name=".GameSampleActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".LauncherSampleActivity" android:exported="true"
+        <activity android:name=".LauncherSampleActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".showcase.DemoShowcaseActivity" android:exported="true"
+        <activity android:name=".showcase.DemoShowcaseActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
-        <activity android:name=".AppDemoActivity" android:exported="true"
+        <activity android:name=".AppDemoActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
         <activity android:name=".LicensesActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />

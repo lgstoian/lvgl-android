@@ -42,6 +42,15 @@ $env:ANDROID_HOME = "D:\ASDK"
 cd "D:\Code\android lvgl"
 .\gradlew.bat assembleDebug --no-daemon
 
+# Release artifact gates (build release first; fails on a missing ABI APK)
+.\gradlew.bat assembleRelease --no-daemon
+
+# AAB: bundle in a separate step with ABI splits disabled. Never combine this
+# with assembleRelease: splits + R8 resource shrinking make bundleRelease fail.
+.\gradlew.bat bundleRelease -Plvgl.bundleNoSplits=true --no-daemon
+.\tools\size-report.ps1
+.\gradlew.bat lintVitalRelease --no-daemon
+
 # Start emulator (wait 3+ minutes for boot)
 $env:ANDROID_HOME = "D:\ASDK"
 $env:ANDROID_AVD_HOME = "C:\Users\lgstoian\.android\avd"
@@ -59,6 +68,9 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 
 # View LVGL logs
 & "D:\ASDK\platform-tools\adb.exe" logcat -d -s "LVGLPort"
+
+# Release smoke: walk the release APK (the release workflow blocks on this)
+& powershell -File tools\dynamic-test.ps1 -ApkPath app\build\outputs\apk\release\app-universal-release.apk
 ```
 
 ## Release & Size Budget
@@ -66,8 +78,19 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 - **Version**: single source of truth in `gradle.properties`
   (`lvgl.versionCode`, `lvgl.versionName`); both modules read it.
 - **Size budget**: `tools/size-report.ps1` enforces 4 MB per-ABI / 6 MB universal
-  in CI. Release uses R8 full mode, resource shrinking, per-ABI splits, the
-  static C++ STL, legacy native packaging and `resConfigs("en")`. [BC-031]
+  in CI and fails when an expected ABI APK is missing. Release uses R8 full mode,
+  resource shrinking, per-ABI splits, the static C++ STL, legacy native packaging
+  and `resConfigs("en")`. [BC-031, BC-037]
+- **Release smoke**: CI runs a release APK smoke test and `lintVitalRelease`; the
+  release workflow blocks on the smoke, and the harness can run against the
+  release APK to verify R8/JNI survival at runtime. [BC-037]
+- **AAB bundling**: per-ABI APKs come from `assembleRelease`; the AAB comes from
+  `bundleRelease -Plvgl.bundleNoSplits=true` as a separate step. The two must not
+  be combined: with ABI splits and R8 resource shrinking both enabled,
+  `bundleRelease` expects one shrunk `.ap_` but finds three and fails. Play
+  receives the AAB; a green `assembleRelease` does not prove the bundle works.
+- **Toolchain**: AGP and Gradle must officially support compileSdk/targetSdk 36;
+  a Gradle check fails on an AGP/SDK mismatch instead of warning.
 - **API compatibility**: `api/lvgl-android.api` is checked by
   `:lvgl-android:apiCheck` in CI. On a deliberate API change, run
   `:lvgl-android:apiDump` and commit the new dump.
@@ -176,6 +199,10 @@ are listed under "Guard Test Protection" below. Each rule is backed by a
   protection). If you change a detector, update its canary too.
 - Guard tests locate the repo root by walking up and assert the path exists, so a
   broken path fails loudly instead of silently passing. See `BC-014`.
+- **Gates fail closed**: a missing or malformed report, APK or attribute value
+  must fail the gate, never read as "clean". Every detector needs a canary that
+  must be detected, a clean fixture that must not be, and a wiring canary proving
+  the detector is actually invoked. See `BC-037`.
 
 ## Hard Rules (enforced from user requirements)
 

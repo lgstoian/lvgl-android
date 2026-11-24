@@ -42,9 +42,16 @@ android {
     // Per-ABI APKs: each download carries a single native library, which is the
     // single biggest win for APK size. The universal APK is still produced for
     // local installs and testing.
+    /* The AAB is built in a separate invocation with -Plvgl.bundleNoSplits=true.
+     * AGP's buildReleasePreBundle requires exactly one shrunk resource .ap_ file,
+     * but ABI splits produce one per split plus the universal. Play generates
+     * per-device splits from an AAB anyway, so bundling without splits is both
+     * correct and the only way to combine resource shrinking with AAB output. */
+    val bundleWithoutSplits = (project.findProperty("lvgl.bundleNoSplits") as? String)
+        ?.toBoolean() ?: false
     splits {
         abi {
-            isEnable = true
+            isEnable = !bundleWithoutSplits
             reset()
             include("arm64-v8a", "x86_64")
             isUniversalApk = true

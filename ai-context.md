@@ -808,4 +808,185 @@ containing the widget's fill colour, then tap the device coordinate
 **Note**: `input swipe X Y X Y 250` is enough for LVGL (the touch callback holds
 PRESSED until polled), but use 400 ms to be safe.
 
+## Gate Integrity & Release Verification (2026-11-24)
+
+A false-green audit found gates that passed when their input was missing or
+malformed, and a release path CI never exercised. Each fix makes the gate fail
+closed and proves the detector is actually invoked. See BC-037.
+
+### A Malformed Layout Report Parsed as "No Issues"
+
+**Problem**: `LayoutLintRules.parseIssues()` returned an empty list for a
+malformed or non-JSON report, so `LayoutLintGuardTest` reported a clean screen.
+
+**Root Cause**: `MiniJson.parse(json) as? Map<*, *> ?: return emptyList()` and
+`root["issues"] as? List<*> ?: return emptyList()` treated a parse failure exactly
+like a report with zero issues. Individual bad entries were also dropped by
+`mapNotNull`, so a corrupted report looked like a perfect one.
+
+**Fix**: fail closed — a report that cannot be parsed, or that has no `issues`
+array, is a violation, and malformed entries are reported rather than skipped.
+Canaries feed a broken fixture that must be detected and a clean one that must not.
+
+**Trap**: never encode "no problems" and "could not check" as the same empty list;
+that is how a lint regression becomes a green build.
+
+### `?: return` Inside a `@Test` Turned a Parse Failure Into a Pass
+
+**Problem**: `MachineCommentValidationTest` could report success after its JSON
+parse returned null.
+
+**Root Cause**: a `?: return` inside a `@Test` method returns normally from the
+test, so a null parse was indistinguishable from a passing assertion.
+
+**Fix**: assert the parse result (non-null and of the expected shape) instead of
+returning, and cover the parser with canary fixtures. Recall the earlier MiniJson
+note: a valid JSON `null` needs a sentinel distinct from a parse failure.
+
+**Trap**: `return` inside a test is almost always a false green — use
+`assertNotNull`/`assert*` or `error()` so the failure is loud.
+
+### PlayComplianceGuardTest Checked Presence, Not Values, and Had No Canary
+
+**Problem**: the Play gate could pass while a manifest attribute had the wrong
+value, and nothing proved the detector actually ran.
+
+**Root Cause**: checks were text-presence checks (`contains(...)`) inside the
+test, with no pure detector in `GuardRules` and no `GuardCanaryTest` fixture.
+
+**Fix**: extract a pure detector, parse and compare attribute *values* (targetSdk,
+backup/locale/back-callback attributes, the permission set), and add broken/clean
+canaries plus a wiring assertion that the guard test invokes the detector.
+
+**Trap**: `contains()` proves a string exists somewhere, not that its value is
+correct; it also cannot fail on a regression that removes the line.
+
+### HardRuleGuardTest Scanned Only `*Activity.kt`
+
+**Problem**: hardcoded strings and other hard-rule violations in Kotlin sources
+that did not end in `Activity.kt` were never checked.
+
+**Root Cause**: the file filter matched only the `*Activity.kt` naming pattern.
+
+**Fix**: scan every `.kt` file under `app/src/main/java`, with a canary fixture
+outside `*Activity.kt` that must be detected.
+
+**Trap**: narrowing a glob to "the files we usually check" silently drops every
+new class that does not follow the naming convention.
+
+### size-report.ps1 Did Not Assert ABI Presence
+
+**Problem**: the size budget passed even when an expected per-ABI release APK
+was missing from `app/build/outputs/apk/release`.
+
+**Root Cause**: the script only iterated over APKs that happened to exist and
+checked their sizes; absence was not a failure.
+
+**Fix**: assert the expected ABI APKs are present before evaluating budgets, so a
+missing split fails the gate. See BC-031 and BC-037.
+
+**Trap**: "all files that are present are under budget" is not the same as "all
+expected files are present".
+
+### CI Ran `lintDebug` Only
+
+**Problem**: release-only lint errors were not caught before a release.
+
+**Root Cause**: the CI workflow invoked `lintDebug`; `lintVitalRelease` was never
+run, so issues that appear only in the minified release variant slipped through.
+
+**Fix**: add `lintVitalRelease` to CI. Keep the library module's
+`isMinifyEnabled = false` (see the 2026-11-04 note) so lint does not report false
+`Instantiatable` errors.
+
+**Trap**: a passing debug lint says nothing about the release variant; do not
+treat it as release verification.
+
+### AGP 8.2 Warned on compileSdk 36
+
+**Problem**: the build warned that compileSdk 36 was not officially supported by
+the installed Android Gradle Plugin, leaving API-36 behaviour unverified.
+
+**Root Cause**: AGP and Gradle predated official API 36 support.
+
+**Fix**: upgrade AGP and Gradle to versions that officially support
+compileSdk/targetSdk 36, and add a Gradle check that fails on an AGP/SDK mismatch
+instead of warning.
+
+**Trap**: a warning is not a gate — a green build can still be an unsupported
+toolchain combination.
+
+### The Dynamic Harness Only Tested the Debug APK
+
+**Problem**: the emulator walk passed while the release artifact could still
+break at runtime (R8 shrinking JNI entry points, a missing native library, or a
+wrong ABI split).
+
+**Root Cause**: the harness only installed `app-universal-debug.apk`.
+
+**Fix**: let the harness run against the release APK via `-ApkPath`, add a CI
+release smoke test, and make the release workflow block on that smoke. Runtime
+native init proves the JNI entry points and `.so` survived R8 and packaging.
+
+**Trap**: a debug APK keeps symbols and rules that R8 strips; a debug green is
+not evidence that the shipped artifact starts.
+
+### Nine Exported Activities in the Shipped Manifest
+
+**Problem**: a Craft Anything inspection of the **release APK** found nine
+activities with `android:exported="true"` and no intent filters, including the
+eight sample activities. They could be launched by any other app on the device.
+
+**Root Cause**: the sample activities had all been declared `exported="true"`
+when the API 31 requirement for explicit `exported` values was added, instead of
+granting external visibility only to the real entry point. The source manifest
+compiled cleanly, so only inspecting the shipped artifact exposed the exposure.
+
+**Fix**: in `app/src/main/AndroidManifest.xml`, keep `MainActivity` as the only
+`exported="true"` activity (it owns the `MAIN`/`LAUNCHER` filter) and set the
+eight sample activities to `exported="false"`. Verify the compiled manifest in
+the release APK, not just the source file.
+
+**Trap**: do not blanket-set `exported="true"` to silence the API 31 install
+error — every exported component is part of the app's attack surface. Also do not
+assume the source manifest is what ships; check the merged manifest in the
+artifact. See BC-035.
+
+### Shell Cannot Launch Non-Exported Sample Activities
+
+**Problem**: after hardening the manifest, `adb shell am start -n
+com.lvgl.sample/.showcase.DemoShowcaseActivity` failed with "not exported from
+uid 2000", so the dynamic harness could no longer produce the
+`Showcase built: 4 tiles` marker.
+
+**Root Cause**: `am start` from the shell is an *external* launch; it must obey
+`exported`. Only `MainActivity` is exported now.
+
+**Fix**: `MainActivity.onCreateLvgl()` reads an `Int` intent extra
+`SMOKE_SCREEN` and resolves it through the existing
+`LvglActivity.screenResolver` map, then starts the target with an **internal**
+explicit `Intent`. The harness launches the exported `MainActivity` with
+`--ei SMOKE_SCREEN <id>`, so each target activity still gets its real lifecycle.
+No screen-to-activity mapping was duplicated and no activity was re-exported.
+
+**Trap**: do not re-export activities to make `am start` work, and do not replace
+the activity walk with `setLvglScreen()` calls — that would stop testing lifecycle.
+
+### AGP Upgrade Leaves Stale Optimized Resources
+
+**Problem**: after upgrading AGP 8.2 → 8.10.1, `bundleRelease` failed at
+`:app:buildReleasePreBundle` with `IllegalArgumentException: Sequence contains
+more than one matching element`.
+
+**Root Cause**: the previous AGP left two copies of the release resource `.ap_`
+in `app/build/intermediates/optimized_processed_res/release/` (one at the root,
+one under `optimizeReleaseResources/`). `PerModuleBundleTask.getResourcesFile()`
+expects exactly one match and refuses the ambiguous set.
+
+**Fix**: `./gradlew clean` before the first post-upgrade full build. CI checks out
+clean, so it is unaffected.
+
+**Trap**: a green `assembleRelease` does **not** prove `bundleRelease` works —
+run both, and never debug this failure by changing resource shrinking settings.
+
 

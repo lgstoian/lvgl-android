@@ -14,6 +14,7 @@ jobs:
       contents: write
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
     - uses: actions/checkout@v4
@@ -56,10 +57,48 @@ jobs:
         LVGL_KEY_ALIAS: ${{ secrets.LVGL_KEY_ALIAS }}
         LVGL_KEY_PASSWORD: ${{ secrets.LVGL_KEY_PASSWORD }}
       run: |
-        ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+        ./gradlew assembleRelease --no-daemon --stacktrace
+        # Build the AAB in a separate command with ABI splits disabled.
+        # AGP 8.10.1 fails bundleRelease when ABI splits and R8 resource
+        # shrinking are combined (":app:buildReleasePreBundle":
+        # "Sequence contains more than one matching element" — it expects one
+        # shrunk .ap_ but finds three). Keep -Plvgl.bundleNoSplits=true; do NOT
+        # fold this back into assembleRelease or drop the property.
+        ./gradlew bundleRelease -Plvgl.bundleNoSplits=true --no-daemon --stacktrace
         mkdir -p release-artifacts
         cp app/build/outputs/apk/release/*.apk release-artifacts/
         cp app/build/outputs/bundle/release/*.aab release-artifacts/
+        test -s release-artifacts/app-universal-release.apk || { echo "Missing universal release APK"; exit 1; }
+        ls -l release-artifacts/
+
+    - name: Upload universal APK for fallback smoke
+      uses: actions/upload-artifact@v4
+      with:
+        # Only consumed by smoke-fallback below; publishing still happens in
+        # this job and only after the required target-level smoke passes.
+        name: smoke-apk
+        path: release-artifacts/app-universal-release.apk
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Release smoke (target API 36, blocks publishing on failure)
+      # REQUIRED gate, same smoke path CI uses: install the universal release
+      # APK and assert no app crash/ANR, LVGL init, the 4 showcase tiles and
+      # clean layout lint. This is a hard gate with no error tolerance and no
+      # unconditional-always clause: a failure skips the checksums and Create
+      # Release steps below. tools/ci-dynamic.sh fails closed when the APK is
+      # missing.
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        # Exercise the published targetSdk (36), not a lower compatibility
+        # level. ubuntu-latest provides the android-36 google_apis x86_64 image
+        # the runner installs via sdkmanager. Do NOT downgrade to 34 to make CI
+        # green: if the image is unavailable this job fails loudly and the
+        # smoke-fallback job reports a clearly non-equivalent API-34 smoke.
+        api-level: 36
+        arch: x86_64
+        profile: pixel_5
+        script: SMOKE_ONLY=1 RELEASE_APK=release-artifacts/app-universal-release.apk sh tools/ci-dynamic.sh
 
     - name: Generate checksums
       run: |
@@ -83,3 +122,39 @@ jobs:
         body_path: release-artifacts/RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Fallback for when the target-level smoke cannot run — e.g. no API 36 system
+  # image on ubuntu-latest. It repeats only the release smoke on API 34 for
+  # diagnostic coverage. This is NOT equivalent to target-level verification:
+  # the failed `build` job still fails the workflow, and publishing happens only
+  # after the API 36 smoke passes, so this job can never publish or mask the
+  # required gate.
+  smoke-fallback:
+    runs-on: ubuntu-latest
+    needs: build
+    if: failure()
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      RELEASE_APK: smoke-apk/app-universal-release.apk
+    steps:
+    - uses: actions/checkout@v4
+      with: { submodules: recursive }
+    - uses: actions/setup-java@v4
+      with: { java-version: '17', distribution: 'temurin' }
+    - name: Setup SDK + NDK
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+    - name: Download release APK
+      uses: actions/download-artifact@v4
+      with:
+        name: smoke-apk
+        path: smoke-apk
+    - name: API 34 fallback smoke (diagnostic only, NOT a publishing gate)
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        arch: x86_64
+        profile: pixel_5
+        script: SMOKE_ONLY=1 sh tools/ci-dynamic.sh

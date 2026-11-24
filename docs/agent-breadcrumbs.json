@@ -728,6 +728,34 @@
         "Do not drop the app-scoped markers; the walk must still fail on a real app crash."
       ],
       "ai_hint": "If the CI dynamic job fails with 'Crash/ANR detected in logcat', read the printed logcat lines before changing app code - they are usually system-process noise."
+    },
+    {
+      "id": "BC-037",
+      "title": "Gates fail closed",
+      "decision": "Every CI gate fails closed on missing or malformed input: LayoutLintRules rejects a malformed layout report instead of reading it as zero issues, PlayComplianceGuardTest is a pure detector with canaries that parses attribute values, HardRuleGuardTest scans every .kt file under app/src/main/java, size-report.ps1 fails when an expected ABI APK is missing, and wiring canaries prove each detector is actually invoked.",
+      "rationale": "Several gates returned 'clean' when their input was missing or malformed — a malformed JSON report parsed as no issues, a `?: return` inside a @Test, and presence-only Play checks — so a regression could pass CI as a false green. A gate must distinguish 'no problems' from 'could not check', and must prove the detector ran at all.",
+      "consequences": [
+        "A malformed or missing report, APK or attribute fails the gate instead of passing it.",
+        "Each detector has a canary that must be detected and a clean fixture that must not be.",
+        "Wiring canaries assert that the guard test invokes the detector, not just that it is defined.",
+        "An AGP/SDK mismatch is a Gradle failure, not a warning."
+      ],
+      "files": [
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/GuardRules.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/LayoutLintRules.kt",
+        "lvgl-android/src/test/kotlin/com/lvgl/android/guards/PlayComplianceGuardTest.kt",
+        "tools/size-report.ps1",
+        "tools/dynamic-test.ps1"
+      ],
+      "symbols": ["GuardRules", "LayoutLintRules", "PlayComplianceGuardTest", "size-report.ps1", "dynamic-test.ps1"],
+      "see_also": ["BC-014", "BC-027", "BC-035", "BC-036"],
+      "do_not": [
+        "Do not map a parse failure or a missing input to an empty issue list.",
+        "Do not use `?: return` inside a @Test; it turns a parse failure into a pass.",
+        "Do not add a detector without a canary and a wiring assertion that the detector is invoked.",
+        "Do not treat a toolchain warning as a gate."
+      ],
+      "ai_hint": "If a guard goes green after a regression, check first whether its input was malformed, whether the detector actually ran, and whether the canary still fails on a broken fixture."
     }
   ]
 }

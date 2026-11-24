@@ -42,6 +42,16 @@ if ($apks.Count -eq 0) {
     exit 1
 }
 
+$RequiredAbis = @("arm64-v8a", "x86_64", "universal")
+$missingAbis = @($RequiredAbis | Where-Object {
+    $required = $_
+    @($apks | Where-Object { $_.Name -like "*$required*" }).Count -eq 0
+})
+if ($missingAbis.Count -gt 0) {
+    Write-Error "Missing release APK(s) for: $($missingAbis -join ', ') in $ApkDir"
+    exit 1
+}
+
 $failures = @()
 foreach ($apk in $apks) {
     $mb = [math]::Round($apk.Length / 1MB, 2)

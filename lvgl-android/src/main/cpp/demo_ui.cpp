@@ -217,6 +217,7 @@ static UiTokens make_tokens(int dpi) {
     t.r_md = ui_dpx(12, dpi);
     t.r_lg = ui_dpx(16, dpi);
     t.r_xl = ui_dpx(24, dpi);
+    t.fab_size = ui_dpx(56, dpi);
     t.f_caption  = 11;
     t.f_body     = 14;
     t.f_subtitle = 16;
@@ -229,6 +230,15 @@ static UiTokens g_tx = make_tokens(440);
 
 const UiTokens& ui_tokens() {
     return g_tx;
+}
+
+/* Vertical band a bottom-right FAB occupies: its own edge length plus the
+ * standard margin below it and a matching gap above. Scrollable content and
+ * footers stop above this band so the FAB never covers the last row.
+ * Shared by the dashboard sidebar and the widget-showcase bottom inset.
+ * @breadcrumb BC-027 @breadcrumb BC-030 */
+static int fab_bottom_inset() {
+    return ui_tokens().fab_size + ui_tokens().lg * 2;
 }
 
 int ui_space(UiSpace s) {
@@ -558,13 +568,13 @@ lv_obj_t* ui_make_chip(lv_obj_t* parent, const char* label, bool selected) {
 lv_obj_t* ui_make_fab(lv_obj_t* parent, const char* icon, const char* label) {
     lv_obj_t* f = lv_button_create(parent);
     lv_obj_add_flag(f, LV_OBJ_FLAG_FLOATING);
-    lv_obj_set_height(f, ui_dpx(56, g_dpi));
+    lv_obj_set_height(f, ui_tokens().fab_size);
     if (label && *label) {
         lv_obj_set_width(f, LV_SIZE_CONTENT);
         lv_obj_set_style_pad_left(f, ui_dpx(16, g_dpi), LV_PART_MAIN);
         lv_obj_set_style_pad_right(f, ui_dpx(20, g_dpi), LV_PART_MAIN);
     } else {
-        lv_obj_set_width(f, ui_dpx(56, g_dpi));
+        lv_obj_set_width(f, ui_tokens().fab_size);
     }
     lv_obj_set_style_radius(f, ui_dpx(16, g_dpi), LV_PART_MAIN);
     lv_obj_set_style_bg_color(f, mrole(MATERIAL_PRIMARY_CONTAINER), LV_PART_MAIN);
@@ -1565,6 +1575,10 @@ void build_home_screen(int /*dpi*/) {
     const int H = LV_VER_RES;
     const int sb_h = ui_dpx(52, g_dpi);
     const int pad = ui_dpx(12, g_dpi);
+    /* The theme FAB floats over the bottom-right corner. Stop the scrollable
+     * sidebar above its band so the last buttons and status line are never
+     * covered by it. @breadcrumb BC-027 */
+    const int fab_inset = fab_bottom_inset();
     const bool landscape = W > H;
 
     lv_obj_t* bar = ui_make_status_bar(root);
@@ -1579,7 +1593,7 @@ void build_home_screen(int /*dpi*/) {
         dy = sb_h + pad;
         sx = pad * 2 + dw;
         sy = sb_h + pad;
-        sh = dh;
+        sh = dh - (fab_inset - pad);
     } else {
         dh = (H - sb_h - pad * 3) * 44 / 100;
         dw = W - pad * 2;
@@ -1588,7 +1602,7 @@ void build_home_screen(int /*dpi*/) {
         sx = pad;
         sy = sb_h + pad * 2 + dh;
         sw = W - pad * 2;
-        sh = H - sb_h - pad * 3 - dh;
+        sh = H - sb_h - pad * 3 - dh - (fab_inset - pad);
     }
     if (dw < 80 || dh < 80 || sw < 80 || sh < 80) return;
 
@@ -1604,6 +1618,9 @@ void build_home_screen(int /*dpi*/) {
                           LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_all(sidebar, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_row(sidebar, ui_dpx(12, g_dpi), LV_PART_MAIN);
+    /* Breathing room below the last panel when the sidebar is scrolled down,
+     * so the final status line never sits flush with the viewport edge. */
+    lv_obj_set_style_pad_bottom(sidebar, ui_tokens().lg, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sidebar, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(sidebar, 0, LV_PART_MAIN);
     lv_obj_set_scroll_dir(sidebar, LV_DIR_VER);
@@ -1700,7 +1717,7 @@ void build_home_screen(int /*dpi*/) {
     /* Theme FAB: toggles dark mode through Kotlin (see ui_set_theme_hook). */
     lv_obj_t* theme_fab = ui_make_fab(root, LV_SYMBOL_REFRESH, nullptr);
     lv_obj_align(theme_fab, LV_ALIGN_BOTTOM_RIGHT,
-                 -ui_dpx(16, g_dpi), -ui_dpx(16, g_dpi));
+                 -ui_tokens().lg, -ui_tokens().lg);
     lv_obj_add_event_cb(theme_fab, on_theme_fab_clicked, LV_EVENT_CLICKED, nullptr);
 }
 
@@ -1914,10 +1931,18 @@ void build_widget_screen(int /*dpi*/) {
     lv_obj_add_event_cb(snackbar_btn, on_snackbar_demo_clicked, LV_EVENT_CLICKED, screen);
 
     lv_obj_t* fab = ui_make_fab(screen, LV_SYMBOL_PLUS, nullptr);
-    lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -ui_dpx(16, g_dpi), -ui_dpx(16, g_dpi));
+    lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -ui_tokens().lg, -ui_tokens().lg);
     lv_obj_add_event_cb(fab, on_dialog_demo_clicked, LV_EVENT_CLICKED, screen);
 
     make_footer(screen, "Drag the slider, switch or arc");
+
+    /* Reserve the floating FAB's bottom band below the hint: transparent and
+     * input-transparent, it keeps both the hint and the scrollable body clear
+     * of the button. @breadcrumb BC-027 @breadcrumb BC-030 */
+    lv_obj_t* bottom_inset = lv_obj_create(screen);
+    lv_obj_set_width(bottom_inset, LV_PCT(100));
+    lv_obj_set_height(bottom_inset, fab_bottom_inset());
+    flatten(bottom_inset);
 }
 
 void build_layout_screen(int /*dpi*/) {
@@ -2006,7 +2031,9 @@ void build_interactive_screen(int /*dpi*/) {
  * plus a details section, so the screen reads as a real status page instead of
  * a single card at the top. */
 static void build_status_screen(const char* header, const char* title,
-                                const char* initial_status, const char* footer) {
+                                const char* initial_status, const char* footer,
+                                const char* extra_key = nullptr,
+                                const char* extra_value = nullptr) {
     lv_obj_t* screen = make_screen(g_theme, g_dpi);
     UiScaffold ui = ui_make_scaffold(screen, header, true);
     lv_obj_t* body = ui.body;
@@ -2027,22 +2054,28 @@ static void build_status_screen(const char* header, const char* title,
         { "Thread", "Dedicated" },
         { "Refresh", "Vsync-aware" },
     };
-    for (const auto& r : rows) {
+    auto add_detail_row = [&](const char* key, const char* value) {
         lv_obj_t* row = ui_make_row(info, UI_SPACE_MD);
         lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_t* k = ui_make_label(row, r.key, g_tx.f_body, g_pal.dim);
+        lv_obj_t* k = ui_make_label(row, key, g_tx.f_body, g_pal.dim);
         lv_obj_set_width(k, ui_dpx(110, g_dpi));
-        lv_obj_t* v = ui_make_label(row, r.value, g_tx.f_body, g_pal.text);
+        lv_obj_t* v = ui_make_label(row, value, g_tx.f_body, g_pal.text);
         lv_obj_set_flex_grow(v, 1);
         lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
-    }
+    };
+    for (const auto& r : rows) add_detail_row(r.key, r.value);
+    if (extra_key && extra_value) add_detail_row(extra_key, extra_value);
 
     make_footer(screen, footer);
 }
 
 void build_camera_screen(int /*dpi*/) {
-    build_status_screen("Camera Sample", "Camera2 Preview", "Camera status: idle",
-                        "Status updates from the native Camera2 API");
+    /* LvglCameraPreview drains Camera2 frames locally and never renders them to
+     * the LVGL surface. Say so on the screen instead of promising a preview. */
+    build_status_screen("Camera Sample", "Camera2 Preview",
+                        "Frames processed locally; no on-screen preview",
+                        "Frames are processed locally; camera imagery is not rendered on this surface",
+                        "Preview", "not rendered (frames processed locally)");
 }
 
 /* ---- Game sample: tap the target ---------------------------------------- */

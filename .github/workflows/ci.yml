@@ -60,8 +60,10 @@ jobs:
     - name: Report APK size
       run: pwsh ./tools/size-report.ps1
 
-    - name: Lint
-      run: ./gradlew lintDebug --no-daemon
+    - name: Lint (debug + release vital)
+      # lintVitalRelease is a release gate: never let a release APK ship with
+      # fatal lint findings just because the debug lint step passed.
+      run: ./gradlew lintDebug lintVitalRelease --no-daemon
 
     - name: Run unit + guard tests
       # HardRuleGuardTest enforces AGENTS.md hard rules (no setContentView in
@@ -78,20 +80,35 @@ jobs:
     - name: Test the scaffolding plugin
       run: ./gradlew :build-logic:test --no-daemon --stacktrace
 
-    - name: Upload APK
+    - name: Upload APKs
       uses: actions/upload-artifact@v4
       if: success()
       with:
         name: debug-apk
         path: app/build/outputs/apk/debug/*.apk
 
-  # Dynamic screen walk on an x86_64 emulator (KVM-accelerated on ubuntu).
+    - name: Upload release APK for dynamic smoke
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        # Single-file artifact: the dynamic job downloads this into ./release-apk,
+        # producing release-apk/app-universal-release.apk — exactly the default
+        # RELEASE_APK path in tools/ci-dynamic.sh. Do not change either side.
+        name: release-apk
+        path: app/build/outputs/apk/release/app-universal-release.apk
+        if-no-files-found: error
+
+  # Dynamic screen walk on a software-rendered x86_64 emulator. Hosted runners
+  # do not guarantee KVM, so ci-dynamic.sh treats an unhealthy device as an
+  # infrastructure flake but never retries a failure on a healthy device.
   dynamic:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Mirrors the download path below and the default in tools/ci-dynamic.sh.
+      RELEASE_APK: release-apk/app-universal-release.apk
     steps:
     - uses: actions/checkout@v4
       with: { submodules: recursive }
@@ -102,14 +119,25 @@ jobs:
         export ANDROID_HOME=$ANDROID_SDK_ROOT
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
-    - name: Enable KVM
+    - name: Enable KVM when available (best effort)
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo modprobe kvm || true
-    - name: Run dynamic tests
+    - name: Download release APK
+      uses: actions/download-artifact@v4
+      with:
+        name: release-apk
+        path: release-apk
+    - name: Run dynamic tests (debug walk + required release smoke)
       uses: reactivecircus/android-emulator-runner@v2
       with:
-        api-level: 34
+        # Exercise the published targetSdk (36), not a lower compatibility
+        # level. ubuntu-latest ships the android-36 google_apis x86_64 system
+        # image that the runner installs via sdkmanager. Do NOT downgrade this
+        # to 34 to make CI green: if the image is unavailable the job fails
+        # loudly, and dynamic-fallback below runs an explicitly non-equivalent
+        # API-34 smoke instead of silently losing target-level coverage.
+        api-level: 36
         arch: x86_64
         profile: pixel_5
         script: sh tools/ci-dynamic.sh
@@ -118,5 +146,42 @@ jobs:
       if: failure()
       with:
         name: dynamic-logs
-        path: screenshots/dynamic/
+        path: |
+          screenshots/dynamic/
+          screenshots/dynamic-release/
         retention-days: 7
+
+  # Fallback for when the API 36 (target-level) job cannot run — e.g. no 36
+  # system image on ubuntu-latest. It repeats only the release smoke on API 34
+  # for diagnostic coverage. This is NOT a substitute for target-level
+  # verification: the failed `dynamic` job still fails the workflow, so target
+  # coverage can never be silently dropped, and this job never publishes.
+  dynamic-fallback:
+    runs-on: ubuntu-latest
+    needs: [build, dynamic]
+    if: failure() && needs.build.result == 'success'
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      RELEASE_APK: release-apk/app-universal-release.apk
+    steps:
+    - uses: actions/checkout@v4
+      with: { submodules: recursive }
+    - uses: actions/setup-java@v4
+      with: { java-version: '17', distribution: 'temurin' }
+    - name: Setup SDK + NDK
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+    - name: Download release APK
+      uses: actions/download-artifact@v4
+      with:
+        name: release-apk
+        path: release-apk
+    - name: API 34 fallback smoke (diagnostic only, NOT target-level coverage)
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        arch: x86_64
+        profile: pixel_5
+        script: SMOKE_ONLY=1 sh tools/ci-dynamic.sh

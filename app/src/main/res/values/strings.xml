@@ -24,6 +24,9 @@
     <string name="app_demo_gauges_section">Gauges</string>
     <string name="app_demo_dropdown_section">Dropdown</string>
     <string name="app_demo_option">Selected: %1$d</string>
+    <string name="app_demo_option_a">Option A</string>
+    <string name="app_demo_option_b">Option B</string>
+    <string name="app_demo_option_c">Option C</string>
     <string name="app_demo_licenses">Open source licenses</string>
 
     <!-- Open source notices (Play policy: the app must disclose the licenses of

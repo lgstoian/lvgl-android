@@ -24,9 +24,11 @@ import java.io.File
  *    screen). Switch content via LvglEngine.setScreen() instead.
  *  - No feature removals: all app types (IME, launcher, game, camera) must
  *    still exist as classes.
- *  - No hardcoded user-visible strings in activity sources.
+ *  - No hardcoded user-visible strings in any app Kotlin source, not just
+ *    files named *Activity.kt (BC-037).
  *
  * @breadcrumb BC-014
+ * @breadcrumb BC-037
  * @guard-rule rule=no-set-content-view test=HardRuleGuardTest
  * @guard-rule rule=all-app-types test=HardRuleGuardTest
  * @guard-rule rule=no-hardcoded-strings test=HardRuleGuardTest
@@ -46,23 +48,25 @@ class HardRuleGuardTest {
 
     private val appSrc = File(repoRoot, "app/src/main/java")
 
+    private fun kotlinSources(): List<File> =
+        appSrc.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+
     @Test
     fun guardTestCanSeeAppSources() {
         assertTrue(
             "Guard test cannot locate app sources (looked for app/src/main/java under $repoRoot)",
             appSrc.isDirectory
         )
+        assertTrue("No .kt files found under $appSrc", kotlinSources().isNotEmpty())
     }
 
     @Test
     fun noSetContentViewInLvglActivitySubclasses() {
-        val activities = appSrc.walkTopDown().filter { it.isFile && it.name.endsWith("Activity.kt") }
-        val found = activities.toList()
-        assertTrue("No Activity.kt files found under $appSrc", found.isNotEmpty())
+        val found = kotlinSources()
+        assertTrue("No .kt files found under $appSrc", found.isNotEmpty())
 
-        val violations = found.flatMap { f ->
-            GuardRules.detectSetContentView(f.name, f.readText())
-        }
+        val violations = GuardRules.detectHardRuleViolations(found.map { it.name to it.readText() })
+            .filter { "setContentView" in it.reason }
         assertTrue(
             "LvglActivity subclasses must NOT call setContentView(): " +
                 violations.joinToString("; ") { "${it.file}:${it.line} ${it.text}" },
@@ -96,17 +100,14 @@ class HardRuleGuardTest {
     }
 
     @Test
-    fun noHardcodedUserStringsInActivities() {
+    fun noHardcodedUserStringsInAppSources() {
         // User-visible text must come from resources, not string literals in
-        // activity Kotlin files (except log tags, class refs, LVGL API keys).
-        val activityFiles = appSrc.walkTopDown().filter {
-            it.isFile && it.name.endsWith("Activity.kt")
-        }.toList()
-        assertTrue("No Activity.kt files found under $appSrc", activityFiles.isNotEmpty())
+        // any app Kotlin file (except log tags, class refs, LVGL API keys).
+        val kotlinFiles = kotlinSources()
+        assertTrue("No .kt files found under $appSrc", kotlinFiles.isNotEmpty())
 
-        val violations = activityFiles.flatMap { f ->
-            GuardRules.detectHardcodedUserStrings(f.name, f.readText())
-        }
+        val violations = GuardRules.detectHardRuleViolations(kotlinFiles.map { it.name to it.readText() })
+            .filter { "strings.xml" in it.reason }
         assertTrue(
             "Hardcoded user strings found (move to strings.xml): " +
                 violations.joinToString("; ") { "${it.file}:${it.line} ${it.text}" },

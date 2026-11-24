@@ -84,7 +84,15 @@ object AppDemoScreen {
                 column(card = true) {
                     label(context.getString(R.string.app_demo_dropdown_section), sizeDp = 12)
                     spacer(4)
-                    dropdown(listOf("Option A", "Option B", "Option C"), 0, id = ID_DROPDOWN) { index ->
+                    dropdown(
+                        listOf(
+                            context.getString(R.string.app_demo_option_a),
+                            context.getString(R.string.app_demo_option_b),
+                            context.getString(R.string.app_demo_option_c)
+                        ),
+                        0,
+                        id = ID_DROPDOWN
+                    ) { index ->
                         LvglUi.updateNode(
                             SCREEN_ID, ID_DROPDOWN_VALUE,
                             text = context.getString(R.string.app_demo_option, index + 1)

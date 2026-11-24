@@ -119,12 +119,20 @@ class MachineCommentValidationTest {
         val trail = loadTrailIds()
         val adrs = loadAdrIds()
         val errors = mutableListOf<String>()
-        val root = MiniJson.parse(trailFile.readText()) as? Map<*, *> ?: return
-        val entries = root["entries"] as? List<*> ?: return
-        entries.forEach { raw ->
-            val entry = raw as? Map<*, *> ?: return@forEach
-            val id = entry["id"] as? String ?: return@forEach
-            (entry["see_also"] as? List<*>)?.forEach { ref ->
+        val root = MiniJson.parse(trailFile.readText())
+        assertTrue("Breadcrumb trail is not a JSON object", root is Map<*, *>)
+        @Suppress("UNCHECKED_CAST")
+        val entries = (root as Map<String, Any?>)["entries"] as? List<*>
+        assertTrue("Breadcrumb trail has no entries array", entries != null)
+        entries!!.forEachIndexed { idx, raw ->
+            assertTrue("entries[$idx] is not an object", raw is Map<*, *>)
+            @Suppress("UNCHECKED_CAST")
+            val entry = raw as Map<String, Any?>
+            val id = entry["id"] as? String
+            assertTrue("entries[$idx] has no id", id != null)
+            val seeAlso = entry["see_also"]
+            assertTrue("Breadcrumb $id has no see_also array", seeAlso is List<*>)
+            (seeAlso as List<*>).forEach { ref ->
                 val r = ref.toString()
                 if (r !in trail && r !in adrs) {
                     errors.add("Breadcrumb $id see_also references unknown $r")
@@ -141,33 +149,43 @@ class MachineCommentValidationTest {
     }
 
     private fun loadTrailIds(): Set<String> {
-        val root = MiniJson.parse(trailFile.readText()) as? Map<*, *> ?: return emptySet()
-        val entries = root["entries"] as? List<*> ?: return emptySet()
-        return entries.mapNotNull { (it as? Map<*, *>)?.get("id") as? String }.toSet()
+        assertTrue("Breadcrumb trail missing: ${trailFile.path}", trailFile.isFile)
+        val root = MiniJson.parse(trailFile.readText())
+        assertTrue("Breadcrumb trail is not a JSON object", root is Map<*, *>)
+        @Suppress("UNCHECKED_CAST")
+        val entries = (root as Map<String, Any?>)["entries"] as? List<*>
+        assertTrue("Breadcrumb trail has no entries array", entries != null)
+        return entries!!.mapIndexed { idx, raw ->
+            assertTrue("entries[$idx] is not an object", raw is Map<*, *>)
+            val id = (raw as Map<*, *>)["id"] as? String
+            assertTrue("entries[$idx] has no id", id != null)
+            id!!
+        }.toSet()
     }
 
-    private fun loadAdrIds(): Set<String> =
-        Regex("""###\s+ADR-(\d+)""").findAll(roadmapFile.readText())
+    private fun loadAdrIds(): Set<String> {
+        assertTrue("ROADMAP.md missing: ${roadmapFile.path}", roadmapFile.isFile)
+        return Regex("""###\s+ADR-(\d+)""").findAll(roadmapFile.readText())
             .map { "ADR-" + it.groupValues[1] }
             .toSet()
+    }
 
     private fun sourceFiles(): List<File> {
         val roots = listOf("lvgl-android/src/main", "lvgl-android/src/test", "app/src/main")
         val out = mutableListOf<File>()
         roots.forEach { rel ->
             val dir = File(repoRoot, rel)
-            if (dir.isDirectory) {
-                dir.walkTopDown()
-                    .filter { it.isFile && it.extension in setOf("kt", "cpp", "h") }
-                    .forEach { out.add(it) }
-            }
+            assertTrue("Source root missing: ${dir.path}", dir.isDirectory)
+            dir.walkTopDown()
+                .filter { it.isFile && it.extension in setOf("kt", "cpp", "h") }
+                .forEach { out.add(it) }
         }
         return out
     }
 
     private fun testSourceFiles(): List<File> {
         val dir = File(repoRoot, "lvgl-android/src/test")
-        if (!dir.isDirectory) return emptyList()
+        assertTrue("Test source root missing: ${dir.path}", dir.isDirectory)
         return dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
     }
 }

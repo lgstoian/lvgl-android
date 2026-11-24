@@ -117,14 +117,30 @@ void Window::create(lv_obj_t* parent, const Config& config) {
         lv_obj_clear_flag(title_lbl_, LV_OBJ_FLAG_SCROLLABLE);
     }
 
-    /* Close hit area (top-right, inside the header row). */
+    /* Close button (top-right, inside the header row). Keep the same 36 dp hit
+     * area and callback as before, but give it a visible affordance: a filled
+     * circular button from the active palette with an X glyph on top. An
+     * invisible close target read as a blank window with no way out. */
     close_btn_ = lv_obj_create(header_);
     lv_obj_set_size(close_btn_, ui_dpx(36, ui_dpi()), ui_dpx(36, ui_dpi()));
-    lv_obj_set_style_bg_opa(close_btn_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_pad_all(close_btn_, 0, 0);
+    lv_obj_set_style_radius(close_btn_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(close_btn_, ui_palette().primary, 0);
+    lv_obj_set_style_bg_opa(close_btn_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(close_btn_, 0, 0);
     lv_obj_clear_flag(close_btn_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(close_btn_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(close_btn_, win_close_on_click, LV_EVENT_CLICKED, this);
+
+    /* The X is a child of the hit area, not a sibling of the title, so it can
+     * neither overlap the label nor steal the close tap. Decorative objects
+     * never intercept input (a plain lv_obj is clickable by default). */
+    lv_obj_t* close_x = lv_label_create(close_btn_);
+    lv_label_set_text(close_x, LV_SYMBOL_CLOSE);
+    lv_obj_set_style_text_font(close_x, ui_font(ui_tokens().f_body, ui_dpi()), 0);
+    lv_obj_set_style_text_color(close_x, ui_palette().on_primary, 0);
+    lv_obj_center(close_x);
+    ui_decorative(close_x);
 
     /* Content area fills the rest below the header. */
     content_ = lv_obj_create(container_);

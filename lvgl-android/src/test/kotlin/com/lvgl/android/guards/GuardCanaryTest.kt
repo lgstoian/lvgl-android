@@ -22,9 +22,11 @@ import org.junit.Test
  * Each detector is fed a deliberately broken fixture that MUST be detected
  * (protects against a false green: a guard that silently checks nothing) and a
  * clean fixture that MUST NOT be detected (protects against a false positive:
- * a guard that fails on valid code).
+ * a guard that fails on valid code). Canaries call the exact public detector
+ * functions the production guard tests call, so detection is proven wired.
  *
  * @breadcrumb BC-014
+ * @breadcrumb BC-037
  * @guard-rule rule=guard-canary test=GuardCanaryTest
  */
 class GuardCanaryTest {
@@ -94,9 +96,19 @@ class GuardCanaryTest {
                 }
             }
         """.trimIndent()
+        val ids = """
+            object Screen {
+                private const val ID_COUNTER = "counter"
+                private const val KEY_SLIDER = "slider_value"
+            }
+        """.trimIndent()
         assertTrue(
             "Canary failed: detector must ignore keys, comments and resources",
             GuardRules.detectHardcodedUserStrings("FooActivity.kt", source).isEmpty()
+        )
+        assertTrue(
+            "Canary failed: DSL node ids are keys, not user-visible strings",
+            GuardRules.detectHardcodedUserStrings("AppDemoScreen.kt", ids).isEmpty()
         )
     }
 
@@ -355,5 +367,347 @@ class GuardCanaryTest {
         assertFalse(stripped.contains("comment"))
         assertTrue(stripped.contains("line3"))
         assertTrue(stripped.contains("line6"))
+    }
+
+    // ---- fail-closed wiring canaries ---------------------------------------
+
+    private data class PlayFixture(
+        val build: String,
+        val manifest: String,
+        val strings: String,
+        val files: Map<String, String>
+    )
+
+    private fun cleanPlayFixture(): PlayFixture {
+        val build = """
+            compileSdk = 36
+            defaultConfig {
+                targetSdk = 36
+                ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+            }
+            splits { abi { include("arm64-v8a", "x86_64"); isUniversalApk = true } }
+            buildTypes { release {
+                isMinifyEnabled = true
+                isShrinkResources = true
+            } }
+        """.trimIndent()
+        val manifest = """
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <queries>
+                <intent>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+                </intent>
+              </queries>
+              <application
+                  android:dataExtractionRules="@xml/data_extraction_rules"
+                  android:fullBackupContent="@xml/backup_rules"
+                  android:enableOnBackInvokedCallback="true"
+                  android:localeConfig="@xml/locales_config"
+                  android:resizeableActivity="true">
+                <activity android:name=".MainActivity" android:exported="true">
+                  <intent-filter>
+                    <action android:name="android.intent.action.MAIN" />
+                    <category android:name="android.intent.category.LAUNCHER" />
+                  </intent-filter>
+                </activity>
+                <activity android:name=".FooActivity" android:exported="false" />
+              </application>
+            </manifest>
+        """.trimIndent()
+        val strings = """<resources><string name="licenses_text">Licenses</string></resources>"""
+        val files = mapOf(
+            "app/src/main/res/xml/backup_rules.xml" to
+                """<full-backup-content><exclude domain="root" path="." /></full-backup-content>""",
+            "app/src/main/res/xml/data_extraction_rules.xml" to
+                """<data-extraction-rules><cloud-backup><exclude domain="root" path="." /></cloud-backup>""" +
+                """<device-transfer><exclude domain="root" path="." /></device-transfer></data-extraction-rules>""",
+            "app/src/main/res/xml/locales_config.xml" to
+                """<locale-config><locale android:name="en" /></locale-config>""",
+            "PRIVACY.md" to "# Privacy",
+            "docs/play-store.md" to "# Play",
+            "app/src/main/java/com/lvgl/sample/LicensesActivity.kt" to "class LicensesActivity",
+        )
+        return PlayFixture(build, manifest, strings, files)
+    }
+
+    @Test
+    fun playComplianceDetectorCatchesBrokenValues() {
+        val clean = cleanPlayFixture()
+        val broken = clean.copy(
+            build = clean.build
+                .replace("targetSdk = 36", "targetSdk = 35")
+                .replace("\"arm64-v8a\"", "\"armeabi-v7a\"")
+                .replace("isMinifyEnabled = true", "isMinifyEnabled = false"),
+            manifest = clean.manifest
+                .replace("enableOnBackInvokedCallback=\"true\"", "enableOnBackInvokedCallback=\"false\"")
+                .replace("resizeableActivity=\"true\"", "resizeableActivity=\"false\"")
+                .replace(
+                    "<uses-permission android:name=\"android.permission.CAMERA\" />",
+                    "<uses-permission android:name=\"android.permission.CAMERA\" />" +
+                        "<uses-permission android:name=\"android.permission.INTERNET\" />"
+                ),
+            files = clean.files + ("app/src/main/res/xml/locales_config.xml" to ""),
+        )
+        val hits = GuardRules.detectPlayComplianceViolations(
+            broken.build, broken.manifest, broken.strings, broken.files
+        )
+        listOf(
+            "targetSdk", "64-bit ABI", "isMinifyEnabled", "enableOnBackInvokedCallback",
+            "resizeableActivity", "permission.CAMERA", "locales_config.xml",
+        ).forEach { part ->
+            assertTrue(
+                "Canary failed: detector must catch broken Play value '$part'",
+                hits.any { part in it.reason },
+            )
+        }
+    }
+
+    @Test
+    fun playComplianceDetectorCatchesWrongActivityExportedValues() {
+        val clean = cleanPlayFixture()
+        val noFilterExported = GuardRules.detectPlayComplianceViolations(
+            clean.build,
+            clean.manifest.replace(
+                "android:name=\".FooActivity\" android:exported=\"false\"",
+                "android:name=\".FooActivity\" android:exported=\"true\"",
+            ),
+            clean.strings,
+            clean.files,
+        )
+        assertTrue(
+            "Canary failed: an activity without an intent filter must not be exported",
+            noFilterExported.any {
+                ".FooActivity has no intent filter and must be exported=\"false\"" in it.reason
+            },
+        )
+
+        val filterNotExported = GuardRules.detectPlayComplianceViolations(
+            clean.build,
+            clean.manifest.replace(
+                "android:name=\".MainActivity\" android:exported=\"true\"",
+                "android:name=\".MainActivity\" android:exported=\"false\"",
+            ),
+            clean.strings,
+            clean.files,
+        )
+        assertTrue(
+            "Canary failed: an activity with an intent filter must be exported",
+            filterNotExported.any {
+                "MainActivity has an intent filter and must be exported=\"true\"" in it.reason
+            },
+        )
+    }
+
+    @Test
+    fun playComplianceDetectorIgnoresCleanFixture() {
+        val clean = cleanPlayFixture()
+        val hits = GuardRules.detectPlayComplianceViolations(
+            clean.build, clean.manifest, clean.strings, clean.files
+        )
+        assertTrue(
+            "Canary failed: clean Play fixture must pass:\n" + hits.joinToString("\n") { it.reason },
+            hits.isEmpty(),
+        )
+    }
+
+    @Test
+    fun hardRuleScannerCatchesViolationInNonActivityFile() {
+        val source = """
+            object Helper {
+                fun show() {
+                    setContentView(root)
+                    setStatus("Welcome to the demo")
+                }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectHardRuleViolations(listOf("Helper.kt" to source))
+        assertTrue(
+            "Canary failed: setContentView in a non-Activity file must be caught",
+            hits.any { "setContentView" in it.reason },
+        )
+        assertTrue(
+            "Canary failed: a user-visible literal in a non-Activity file must be caught",
+            hits.any { "strings.xml" in it.reason },
+        )
+    }
+
+    @Test
+    fun hardRuleScannerIgnoresCleanNonActivityFile() {
+        val hits = GuardRules.detectHardRuleViolations(
+            listOf("Helper.kt" to "object Helper { fun compute() = 42 }")
+        )
+        assertTrue("Canary failed: clean helper file must pass", hits.isEmpty())
+    }
+
+    @Test
+    fun layoutLintDetectorFailsClosedOnBrokenReport() {
+        val hits = LayoutLintRules.validateJson("not json")
+        assertTrue(
+            "Canary failed: a malformed report must produce an invalid-report violation",
+            hits.any { it.startsWith(LayoutLintRules.INVALID_REPORT_TYPE) },
+        )
+        assertTrue(
+            "Canary failed: an invalid report must not be allow-listed",
+            LayoutLintRules.validateJson(
+                "not json", setOf(LayoutLintRules.INVALID_REPORT_TYPE)
+            ).isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun layoutLintDetectorIgnoresCleanReport() {
+        assertTrue(
+            "Canary failed: a clean report must pass",
+            LayoutLintRules.validateJson("""{"issues":[]}""").isEmpty(),
+        )
+    }
+
+    @Test
+    fun sizeReportAbiCheckDetectorCatchesBrokenScript() {
+        val broken = """
+            ${'$'}RequiredAbis = @("arm64-v8a", "x86_64")
+            if (${'$'}RequiredAbis.Count -lt 3) { Write-Host "incomplete" }
+        """.trimIndent()
+        val hits = GuardRules.detectMissingAbiPresenceCheck(broken)
+        assertTrue(
+            "Canary failed: a script missing the universal APK check must be caught",
+            hits.any { "universal" in it.reason },
+        )
+        assertTrue(
+            "Canary failed: a script without a failure path must be caught",
+            hits.any { "fail clearly" in it.reason },
+        )
+    }
+
+    @Test
+    fun sizeReportAbiCheckDetectorIgnoresCleanScript() {
+        val clean = """
+            ${'$'}RequiredAbis = @("arm64-v8a", "x86_64", "universal")
+            ${'$'}missingAbis = @(${'$'}RequiredAbis | Where-Object { ${'$'}_ -eq "universal" })
+            if (${'$'}missingAbis.Count -gt 0) {
+                Write-Error "Missing release APK(s) for: ${'$'}(${'$'}missingAbis -join ', ')"
+                exit 1
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: a script with an ABI presence check must pass",
+            GuardRules.detectMissingAbiPresenceCheck(clean).isEmpty(),
+        )
+    }
+
+    // ---- release workflow detector ----------------------------------------
+
+    private fun cleanWorkflowFixture(): Pair<String, String> {
+        val ci = """
+            name: Android CI
+            jobs:
+              build:
+                steps:
+                - name: Report APK size
+                  run: pwsh ./tools/size-report.ps1
+                - name: Lint (debug + release vital)
+                  run: ./gradlew lintDebug lintVitalRelease --no-daemon
+              dynamic:
+                steps:
+                - name: Run dynamic tests
+                  uses: reactivecircus/android-emulator-runner@v2
+                  with:
+                    api-level: 36
+                    script: sh tools/ci-dynamic.sh
+        """.trimIndent()
+        val release = """
+            name: Release
+            jobs:
+              build:
+                steps:
+                - name: Build release APKs and AAB
+                  run: |
+                    ./gradlew assembleRelease
+                    ./gradlew bundleRelease -Plvgl.bundleNoSplits=true
+                - name: Release smoke (blocks publishing on failure)
+                  uses: reactivecircus/android-emulator-runner@v2
+                  with:
+                    api-level: 36
+                    script: SMOKE_ONLY=1 sh tools/ci-dynamic.sh
+        """.trimIndent()
+        return ci to release
+    }
+
+    @Test
+    fun releaseWorkflowDetectorCatchesMissingApiLevel() {
+        val (ci, release) = cleanWorkflowFixture()
+        val brokenCi = ci.replace("api-level: 36", "api-level: 34")
+        val brokenRelease = release.replace("api-level: 36", "api-level: 34")
+        val hits = GuardRules.detectReleaseWorkflowGaps(brokenCi, brokenRelease)
+        assertTrue("Canary failed: a workflow without api-level 36 must fail", hits.isNotEmpty())
+        assertTrue(
+            "Canary failed: both workflows must require api-level 36",
+            listOf("ci.yml", "release.yml").all { file ->
+                hits.any { it.file == file && "api-level: 36" in it.reason }
+            },
+        )
+    }
+
+    @Test
+    fun releaseWorkflowDetectorCatchesContinueOnErrorOnSmoke() {
+        val (ci, release) = cleanWorkflowFixture()
+        val brokenRelease = release.replace(
+            "- name: Release smoke (blocks publishing on failure)",
+            "- name: Release smoke (blocks publishing on failure)\n" +
+                "                  continue-on-error: true",
+        )
+        val hits = GuardRules.detectReleaseWorkflowGaps(ci, brokenRelease)
+        assertTrue(
+            "Canary failed: continue-on-error on the smoke step must fail",
+            hits.any { "continue-on-error" in it.reason },
+        )
+    }
+
+    @Test
+    fun releaseWorkflowDetectorCatchesMissingGates() {
+        val (ci, release) = cleanWorkflowFixture()
+        val brokenCi = ci
+            .replace("pwsh ./tools/size-report.ps1", "pwsh ./tools/report.ps1")
+            .replace("lintVitalRelease", "lintDebugOnly")
+        val brokenRelease = release
+            .replace("-Plvgl.bundleNoSplits=true", "")
+            .replace("SMOKE_ONLY=1 sh tools/ci-dynamic.sh", "sh tools/dynamic-test.ps1")
+        val hits = GuardRules.detectReleaseWorkflowGaps(brokenCi, brokenRelease)
+        listOf("size-report.ps1", "lintVitalRelease", "bundleNoSplits", "SMOKE_ONLY=1", "ci-dynamic.sh")
+            .forEach { part ->
+                assertTrue(
+                    "Canary failed: detector must catch missing gate '$part'",
+                    hits.any { part in it.reason },
+                )
+            }
+    }
+
+    @Test
+    fun releaseWorkflowDetectorIgnoresCleanFixtureAndDiagnosticFallback() {
+        val (ci, release) = cleanWorkflowFixture()
+        assertTrue(
+            "Canary failed: a clean workflow fixture must pass",
+            GuardRules.detectReleaseWorkflowGaps(ci, release).isEmpty(),
+        )
+        val withFallback = release.replace(
+            "- name: Release smoke (blocks publishing on failure)",
+            "# Fallback diagnostic only, NOT target-level coverage.\n" +
+                "    - name: Smoke fallback (diagnostic only)\n" +
+                "      uses: reactivecircus/android-emulator-runner@v2\n" +
+                "      with:\n" +
+                "        api-level: 34\n" +
+                "        script: sh tools/ci-dynamic.sh\n" +
+                "    - name: Release smoke (blocks publishing on failure)",
+        )
+        assertTrue(
+            "Canary fixture must actually contain a fallback API-34 step",
+            "api-level: 34" in withFallback,
+        )
+        assertTrue(
+            "Canary failed: a named API-34 fallback must not fail the guard",
+            GuardRules.detectReleaseWorkflowGaps(ci, withFallback).isEmpty(),
+        )
     }
 }

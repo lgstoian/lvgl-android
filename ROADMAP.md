@@ -1,7 +1,7 @@
 # LVGL Android Framework — Development Roadmap
 
-> Last updated: 2026-11-04
-> Current Phase: Phase 23 — Google Play compatibility
+> Last updated: 2026-11-24
+> Current Phase: Phase 24 — Gate integrity and shipping verification
 
 ## Overview
 
@@ -216,6 +216,24 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
   attributes, permission set, backup resources, privacy policy and licence
   disclosure.
 
+### Phase 24: Gate integrity and shipping verification ✅
+- Fail-closed gates: a malformed layout-lint report now fails `LayoutLintRules`
+  instead of parsing as zero issues; `PlayComplianceGuardTest` is a pure detector
+  with canaries that parses attribute values; `HardRuleGuardTest` scans every
+  `.kt` file under `app/src/main/java`; `size-report.ps1` fails when an expected
+  per-ABI release APK is missing. [BC-037]
+- Toolchain alignment: AGP and Gradle are upgraded so compileSdk/targetSdk 36 is
+  officially supported, and a Gradle check fails on an AGP/SDK mismatch.
+- Release artifact verification: CI adds a release APK smoke test and
+  `lintVitalRelease`, and the release workflow blocks on the smoke. The dynamic
+  harness can run against the release APK, so R8/JNI survival is proven at runtime.
+- Wiring canaries prove each detector is actually invoked by its guard test, not
+  merely defined. [BC-014, BC-037]
+- Shipped as **v1.1.0** (versionCode 2, 2026-11-24): the AAB is built with
+  `bundleRelease -Plvgl.bundleNoSplits=true` because ABI splits plus R8 resource
+  shrinking make `bundleRelease` fail; per-ABI APKs still come from
+  `assembleRelease`. [BC-037]
+
 ---
 
 ## Progress Tracking
@@ -245,6 +263,7 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 | Phase 21: Kotlin UI Builder & SDK Docs | ✅ Complete | 2026-11-04 | 2026-11-04 |
 | Phase 22: Showcase Window Layout & Launcher Grid | ✅ Complete | 2026-11-04 | 2026-11-04 |
 | Phase 23: Google Play Compatibility | ✅ Complete | 2026-11-04 | 2026-11-04 |
+| Phase 24: Gate Integrity and Shipping Verification | ✅ Complete | 2026-11-24 | 2026-11-24 |
 
 ## Architecture Decision Records
 
@@ -408,6 +427,22 @@ serialised to JSON, rendered by the existing native UI kit (so there is still on
 source of truth for widget styling), and interactions return as typed events.
 App screen ids start at 1000. See `BC-033`.
 
+### ADR-018: Verify the artifact that ships
+
+**Status**: Accepted
+
+**Context**: CI gates could pass on malformed or missing input, the manifest of
+the shipped APK was not inspected for exported components, and the emulator walk
+exercised only the debug APK. A release-only break — R8 shrinking JNI entry
+points, a missing ABI split, an exported sample activity, or an AGP/SDK mismatch —
+could therefore reach users unnoticed.
+
+**Decision**: Make every gate fail closed on missing/malformed input, prove each
+detector with canaries (including wiring canaries), align the toolchain with API
+36 behind a Gradle check, inspect the release APK for unintended exported
+components, and smoke-test the actual release artifact in CI before the release
+workflow proceeds. See `BC-037`.
+
 ## Change Log
 
 - **2026-10-16**: Roadmap created. Phases 1-8 marked complete.
@@ -433,3 +468,6 @@ App screen ids start at 1000. See `BC-033`.
 - **2026-11-04**: Phase 23 — Google Play compatibility: target API 36, backup
   rules, predictive back, locale config, privacy policy and licence disclosure
   (BC-035).
+- **2026-11-24**: Phase 24 — fail-closed gates and wiring canaries, AGP/Gradle
+  alignment for API 36, release-APK smoke with ABI presence and runtime JNI init,
+  and an audit of the shipped manifest (BC-037).

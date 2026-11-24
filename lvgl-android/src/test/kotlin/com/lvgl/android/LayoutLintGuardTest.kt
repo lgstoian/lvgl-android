@@ -92,9 +92,21 @@ class LayoutLintGuardTest {
     }
 
     @Test
-    fun malformedReportYieldsNoIssuesRatherThanThrowing() {
-        assertTrue(LayoutLintRules.parseIssues("not json").isEmpty())
-        assertTrue(LayoutLintRules.parseIssues("{\"issues\":[{}]}").isEmpty())
-        assertTrue(LayoutLintRules.validateJson("not json").isEmpty())
+    fun malformedReportFailsClosed() {
+        val broken = listOf(
+            "not json",
+            "{\"issues\":[{}]}",
+            "{\"no_issues\":[]}",
+            "{\"issues\":[{\"type\":\"text\"}]}",
+        )
+        broken.forEach { json ->
+            val issues = LayoutLintRules.parseIssues(json)
+            assertTrue(
+                "malformed report must produce a violation, not look clean: $json",
+                issues.any { it.type == LayoutLintRules.INVALID_REPORT_TYPE }
+            )
+            val violations = LayoutLintRules.validateJson(json, setOf(LayoutLintRules.INVALID_REPORT_TYPE))
+            assertTrue("invalid report must never be allow-listed: $json", violations.isNotEmpty())
+        }
     }
 }

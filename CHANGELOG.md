@@ -7,14 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-24
+
+Release-artifact integrity: fail-closed gates, a smoke test of the shipped APK,
+and an AAB that bundles without ABI splits.
+
+### Added
+
+- Release-artifact verification: CI runs a release APK smoke test and
+  `lintVitalRelease`, and the release workflow blocks on the smoke. The dynamic
+  harness can run against the release APK, so R8/JNI survival is verified through
+  runtime native init. [BC-037]
+- Gate integrity canaries, including wiring canaries that prove each detector is
+  actually invoked by its guard test rather than merely defined. [BC-014, BC-037]
+- `MainActivity` accepts a `SMOKE_SCREEN` intent extra so the dynamic harness can
+  reach the eight non-exported sample activities through the one exported entry
+  point. [BC-035]
+- Animated showcase windows have a visible close button.
+- The audio showcase window gains an equalizer control.
+
+### Changed
+
+- Toolchain aligned with the target API: AGP is upgraded from 8.2.0 to 8.10.1 and
+  the Gradle wrapper from 8.5 to 8.11.1, so compileSdk/targetSdk 36 is officially
+  supported and a Gradle check blocks an AGP/SDK mismatch instead of warning
+  about it.
+- The AAB is built separately from the APKs: `bundleRelease` fails when ABI
+  splits and R8 resource shrinking are both enabled, so the bundle step uses
+  `-Plvgl.bundleNoSplits=true`. Per-ABI APKs still come from `assembleRelease`;
+  Play receives the AAB.
+
 ### Fixed
 
+- CI gates no longer pass when their input is missing or malformed. A malformed
+  layout-lint report fails `LayoutLintRules` instead of parsing as zero issues,
+  and `size-report.ps1` fails when an expected per-ABI release APK is absent.
+  [BC-037]
+- `PlayComplianceGuardTest` is now a pure detector with canaries that parses and
+  checks attribute values instead of only string presence; `HardRuleGuardTest`
+  scans every `.kt` file under `app/src/main/java` instead of only
+  `*Activity.kt`. [BC-035, BC-037]
+- A `?: return` inside `MachineCommentValidationTest` could turn a parse failure
+  into a passing test; the parse result is now asserted explicitly. [BC-037]
+- Only `MainActivity` is exported in the shipped manifest. A Craft Anything
+  inspection of the release APK found nine activities with `exported=true` and
+  no intent filters; the eight sample activities are now `exported=false`, so
+  they can no longer be launched externally. [BC-035]
 - The CI dynamic job no longer fails on system-process noise. The harness's
   crash check matched the Bluetooth stack's `Start Timeout Delay` log and its
   own SIGABRT on the unaccelerated CI emulator; it now fails only on a crash or
   ANR in the sample app, guarded by `DynamicHarnessGuardTest`. [BC-036]
 - The CI dynamic job installs the universal debug APK via the harness instead
   of the removed per-ABI `app-debug.apk` path.
+- FAB insets are now accounted for, so the button no longer overlaps nearby
+  content.
 
 ## [1.0.0] - 2026-11-04
 
@@ -103,7 +149,7 @@ with LVGL, plus a demo app that showcases every app type.
 ### Build and size
 
 - R8 full mode, resource shrinking, per-ABI splits and the static C++ STL.
-- ~1.3 MB per-ABI release APK, ~2.1 MB universal, ~3.9 MB AAB.
+- ~1.3 MB per-ABI release APK, ~2.1 MB universal, ~4.13 MB AAB.
 - Unit, guard, annotation and instrumented tests, plus GitHub Actions CI.
 
 ### Testing

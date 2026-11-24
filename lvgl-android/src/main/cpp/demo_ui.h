@@ -161,6 +161,7 @@ const UiDeviceInfo& ui_device_info();
 struct UiTokens {
     int xs, sm, md, lg, xl, xxl;   /* spacing scale (px) */
     int r_sm, r_md, r_lg, r_xl;    /* corner radius scale (px) */
+    int fab_size;                  /* standard FAB edge length (px) */
     int f_caption, f_body, f_subtitle, f_title, f_headline;  /* type scale (dp) */
 };
 const UiTokens& ui_tokens();

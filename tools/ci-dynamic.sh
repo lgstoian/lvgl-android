@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
-# Dynamic CI checks for the LVGL Android Framework: the instrumented tests plus
-# the screen walk in tools/dynamic-test.ps1.
+# Dynamic CI checks for the LVGL Android Framework: the instrumented tests, the
+# screen walk in tools/dynamic-test.ps1, and a release-APK smoke over the same
+# harness (R8/JNI survival in the published artifact, not just in debug).
 #
 # The CI emulator has no KVM (software emulation only) and sometimes comes up
 # offline: the emulator cannot reach the host adb daemon and the device stays
@@ -15,6 +16,10 @@
 #   ANDROID_SDK_ROOT / ANDROID_HOME  SDK location (required)
 #   ANDROID_AVD_NAME                AVD to reboot on retry (default: test)
 #   DYNAMIC_ATTEMPTS                retries on an unhealthy device (default: 3)
+#   RELEASE_APK                     universal release APK (default:
+#                                   release-apk/app-universal-release.apk)
+#   SMOKE_ONLY                      1 = skip the debug walk, release smoke only
+#                                   (used by the release workflow)
 
 set -u
 
@@ -28,6 +33,19 @@ fi
 EMULATOR="$SDK_ROOT/emulator/emulator"
 AVD="${ANDROID_AVD_NAME:-test}"
 ATTEMPTS="${DYNAMIC_ATTEMPTS:-3}"
+SMOKE_ONLY="${SMOKE_ONLY:-0}"
+RELEASE_APK="${RELEASE_APK:-release-apk/app-universal-release.apk}"
+case "$RELEASE_APK" in
+  /*) ;;
+  *) RELEASE_APK="$PWD/$RELEASE_APK" ;;
+esac
+
+# Fail closed: a missing release artifact is not a reason to skip the gate.
+if [ ! -f "$RELEASE_APK" ]; then
+  echo "=== Release APK not found: $RELEASE_APK (release smoke is a required gate)"
+  exit 1
+fi
+echo "=== Release APK under test (variant release): $RELEASE_APK"
 
 wait_for_boot() {
   i=0
@@ -55,12 +73,26 @@ restart_emulator() {
   wait_for_boot || true
 }
 
+run_checks() {
+  if [ "$SMOKE_ONLY" = "1" ]; then
+    pwsh ./tools/dynamic-test.ps1 \
+      -ApkPath "$RELEASE_APK" -Variant release -SmokeOnly \
+      -ScreenshotDir screenshots/dynamic-release
+    return $?
+  fi
+
+  ./gradlew :lvgl-android:connectedDebugAndroidTest --no-daemon &&
+    pwsh ./tools/dynamic-test.ps1 &&
+    pwsh ./tools/dynamic-test.ps1 \
+      -ApkPath "$RELEASE_APK" -Variant release -SmokeOnly \
+      -ScreenshotDir screenshots/dynamic-release
+}
+
 attempt=1
 while [ "$attempt" -le "$ATTEMPTS" ]; do
-  echo "=== dynamic attempt $attempt/$ATTEMPTS ==="
+  echo "=== dynamic attempt $attempt/$ATTEMPTS (SMOKE_ONLY=$SMOKE_ONLY) ==="
   adb logcat -c || true
-  if ./gradlew :lvgl-android:connectedDebugAndroidTest --no-daemon &&
-     pwsh ./tools/dynamic-test.ps1; then
+  if run_checks; then
     echo "=== dynamic checks passed on attempt $attempt"
     exit 0
   fi
