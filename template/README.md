@@ -21,9 +21,9 @@ copy ..\gradlew.bat .
 xcopy /E /I ..\gradle\wrapper gradle\wrapper
 ```
 
-If you copied the template elsewhere, copy the same files from any Gradle 8.5
-project, or run `gradle wrapper --gradle-version 8.5` in this directory once to
-generate them. The needed files are `gradlew`, `gradlew.bat`,
+If you copied the template elsewhere, copy the same files from any Gradle 8.11.1
+project, or run `gradle wrapper --gradle-version 8.11.1` in this directory once
+to generate them. The needed files are `gradlew`, `gradlew.bat`,
 `gradle/wrapper/gradle-wrapper.jar` and
 `gradle/wrapper/gradle-wrapper.properties`.
 
@@ -77,14 +77,14 @@ NDK r26b and CMake 3.22.1 (needed to build the library's native code).
 |------|---------|
 | `settings.gradle.kts` | Repositories plus the `includeBuild` composite build |
 | `gradle.properties` | `lvglAndroidPath`, AndroidX and JVM settings |
-| `build.gradle.kts` | AGP 8.2.0 / Kotlin 1.9.22 plugin versions, `apply false` |
+| `build.gradle.kts` | AGP 8.10.1 / Kotlin 1.9.22 plugin versions, `apply false` |
 | `app/build.gradle.kts` | App module, API 24–36, Java 17, library + appcompat |
 | `app/src/main/java/.../MainActivity.kt` | `LvglActivity` subclass showing an LVGL screen |
 | `app/src/main/res/values/themes.xml` | AppCompat DayNight NoActionBar theme |
 
 ## After the library is published
 
-The dependency `com.lvgl.android:lvgl-android:1.0.0` is the same coordinate the
+The dependency `com.lvgl.android:lvgl-android:1.1.0` is the same coordinate the
 composite build substitutes locally. Once the library is published to a Maven
 repository, add that repository to `dependencyResolutionManagement` and remove
 the `includeBuild` block — the app keeps building unchanged.

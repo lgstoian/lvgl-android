@@ -31,7 +31,7 @@ compiles the local library before anything is published:
 cd template
 # Copy the wrapper from the framework repo (gradlew, gradlew.bat, gradle/wrapper/*)
 .\gradlew.bat assembleDebug --no-daemon
-adb install -r app\build\outputs\apk\debug\app-universal-debug.apk
+adb install -r app\build\outputs\apk\debug\app-debug.apk
 adb shell am start -n com.example.lvglapp/.MainActivity
 ```
 
@@ -113,9 +113,9 @@ LvglUi.registerScreen(1000, title = "Hello") {
 ```
 
 Supported nodes: `column`, `row`, `label`, `button`, `slider`, `toggle`,
-`checkbox`, `progress`, `arc`, `divider` and `spacer`. Every builder takes an
-optional `id`; `LvglUi.updateNode(screenId, id, text = ..., value = ...)` patches
-a node from any thread. Node callbacks run on the LVGL thread, and
+`checkbox`, `progress`, `arc`, `dropdown`, `divider` and `spacer`. Every builder
+takes an optional `id`; `LvglUi.updateNode(screenId, id, text = ..., value = ...)`
+patches a node from any thread. Node callbacks run on the LVGL thread, and
 `LvglUi.listener` receives every event for the screen.
 
 App screen ids start at `LvglUi.APP_SCREEN_BASE` (1000). See
@@ -275,7 +275,7 @@ From the template:
 
 ```powershell
 .\gradlew.bat assembleDebug --no-daemon
-adb install -r app\build\outputs\apk\debug\app-universal-debug.apk
+adb install -r app\build\outputs\apk\debug\app-debug.apk
 adb shell am start -n com.example.lvglapp/.MainActivity
 ```
 

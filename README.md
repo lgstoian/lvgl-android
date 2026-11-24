@@ -24,7 +24,7 @@ LVGL renders directly to an Android `SurfaceView` via native C code using JNI, p
 - Input Method Service (keyboard) support
 - Launcher/home screen support
 - Game-optimized activity with vsync
-- Camera preview integration
+- Camera capture helper (frames processed locally; no on-screen preview)
 - R/B pixel swap for correct RGBA rendering
 - Dedicated LVGL render thread (vsync-aware, honours LVGL's requested period)
 - Touch input with pointer gestures
@@ -40,7 +40,8 @@ LVGL renders directly to an Android `SurfaceView` via native C code using JNI, p
 - Google Play ready: target API 36, 64-bit, AAB, runtime permissions, privacy
   policy and in-app licence disclosure
 - Space-efficient releases: R8 full mode, resource shrinking, per-ABI splits and the
-  static C++ STL — ~1.3 MB per ABI, ~2.1 MB universal
+  static C++ STL — 1.31 MB arm64-v8a, 1.33 MB x86_64, 2.06 MB universal APK,
+  4.13 MB AAB
 
 ## Module Structure
 
@@ -97,7 +98,7 @@ android_lvgl/
 - Android NDK r26b or compatible
 - JDK 17+
 - CMake 3.22.1+ (with `share/cmake-X.Y` directory)
-- Gradle 8.5+
+- Gradle 8.11.1+ (Android Gradle Plugin 8.10.1)
 
 ## Environment Setup
 
@@ -123,13 +124,15 @@ APK: `app/build/outputs/apk/debug/app-universal-debug.apk`
 
 ## Demos
 
+Screenshots refreshed from the v1.1.0 build (2026-11-24).
+
 | Device dashboard | Widget showcase |
 | --- | --- |
 | ![Device dashboard](screenshots/dashboard.png) | ![Widget showcase](screenshots/widget_showcase.png) |
 
-| Spring-physics showcase | Showcase window |
+| Showcase tiles | Showcase window |
 | --- | --- |
-| ![Spring-physics showcase](screenshots/showcase.png) | ![Showcase window](screenshots/showcase_window.png) |
+| ![Showcase tiles](screenshots/showcase.png) | ![Showcase window](screenshots/showcase_window.png) |
 
 | Launcher (real app grid) | App demo (Kotlin `LvglUi` screen) |
 | --- | --- |
@@ -175,15 +178,21 @@ Release APKs are split per ABI and minified:
 ```powershell
 .\gradlew.bat assembleRelease
 pwsh tools/size-report.ps1
+
+# AAB for Play: a separate step, because ABI splits and R8 shrinking together
+# make bundleRelease fail. Do not combine the two commands.
+.\gradlew.bat bundleRelease -Plvgl.bundleNoSplits=true
 ```
 
 | artefact | size |
 | --- | --- |
-| `app-arm64-v8a-release.apk` | ~1.3 MB |
-| `app-x86_64-release.apk` | ~1.3 MB |
-| `app-universal-release.apk` | ~2.1 MB |
+| `app-arm64-v8a-release.apk` | 1.31 MB |
+| `app-x86_64-release.apk` | 1.33 MB |
+| `app-universal-release.apk` | 2.06 MB |
+| `app-release.aab` (Play artifact) | 4.13 MB |
 
-The budget (4 MB per ABI, 6 MB universal) is enforced in CI.
+The budget (4 MB per ABI, 6 MB universal) is enforced in CI. CI also runs a
+release-APK smoke test and `lintVitalRelease`.
 
 ## Architecture
 

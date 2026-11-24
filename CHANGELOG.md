@@ -24,7 +24,9 @@ and an AAB that bundles without ABI splits.
   reach the eight non-exported sample activities through the one exported entry
   point. [BC-035]
 - Animated showcase windows have a visible close button.
-- The audio showcase window gains an equalizer control.
+- The audio showcase window gains a 12-band equalizer.
+- The camera sample's copy is explicit that frames are processed locally and no
+  camera imagery is shown on screen.
 
 ### Changed
 

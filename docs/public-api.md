@@ -127,7 +127,8 @@ dropdown(listOf("A", "B", "C"), selectedIndex = 0, id = "pick") { index ->
 ### `LvglNode`
 
 Sealed hierarchy of the supported node types: `Column`, `Row`, `Label`,
-`Button`, `Slider`, `Switch`, `Checkbox`, `Progress`, `Arc`, `Divider`, `Spacer`.
+`Button`, `Slider`, `Switch`, `Checkbox`, `Progress`, `Arc`, `Dropdown`,
+`Divider`, `Spacer`.
 
 ### `LvglUiEvent` / `LvglUiListener`
 
@@ -373,7 +374,8 @@ Camera2 preview helper. `open(cameraId = "0")` opens the camera and starts a
 repeating preview into an internal `ImageReader` (frames are drained, not
 displayed, so it does not fight LVGL for the window). `startPreview(surface)`
 redirects the preview into a caller-supplied `Surface`; `stopPreview()` and
-`close()` release the camera.
+`close()` release the camera. The sample itself reports status in LVGL and does
+not render camera imagery on screen — frames are processed locally.
 
 ```kotlin
 val preview = LvglCameraPreview(this)

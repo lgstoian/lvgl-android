@@ -1,5 +1,5 @@
 // `kotlin-dsl` compiles this build logic with the Kotlin version embedded in
-// Gradle 8.5 (1.9.20); generated modules pin Kotlin 1.9.22 to match the root
+// Gradle 8.11.1 (Dokka 1.9.20); generated modules pin Kotlin 1.9.22 to match the root
 // build.
 plugins {
     `kotlin-dsl`

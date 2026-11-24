@@ -27,6 +27,9 @@ Required tools:
 - **Android SDK**: `D:\ASDK`
 - **Android NDK**: `D:\ASDK\ndk\android-ndk-r26b` (r26b — must match for CMake 3.22.1 compatibility)
 - **CMake**: `D:\ASDK\cmake\3.22.1` (must have `share/cmake-3.22` directory)
+- **Gradle**: wrapper 8.11.1, Android Gradle Plugin 8.10.1, Kotlin 1.9.22
+  (these versions support compileSdk/targetSdk 36; see the guard in the root
+  `build.gradle.kts`)
 
 Set environment before building:
 
@@ -130,7 +133,7 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 12. **UI kit**: all screens are declared in `demo_ui.h` and implemented in `demo_ui.cpp` (single source of truth)
 13. **Material 3 tonal palette**: `MaterialPalette` (20 roles) is the single contract between Android and LVGL; `MaterialTheme` resolves it (baseline or Material You dynamic color) and `nativeApplyTheme` pushes it; native derives every colour from it. [BC-029]
 14. **Material 3 component kit**: native widgets (buttons, chips, FAB, cards, text field, bottom nav, dialog, snackbar, app bar) render Material from the palette, so apps look native while staying pure LVGL. [BC-030]
-15. **Balanced size optimisation**: R8 full mode + resource shrinking + per-ABI splits + static C++ STL + legacy native packaging + `resConfigs("en")`; ~1.3 MB per ABI, ~2.1 MB universal. [BC-031]
+15. **Balanced size optimisation**: R8 full mode + resource shrinking + per-ABI splits + static C++ STL + legacy native packaging + `resConfigs("en")`; 1.31 MB arm64-v8a, 1.33 MB x86_64, 2.06 MB universal APK, 4.13 MB AAB. [BC-031]
 16. **Developer toolkit**: quickstart, public API reference, `template/`, the `com.lvgl.android.app` Gradle plugin, consumer ProGuard rules and a binary-compatibility API dump. [BC-032]
 17. **Kotlin UI builder**: apps declare their own screens with the `LvglUi` DSL; the tree is serialised to JSON and rendered by the native UI kit, with node callbacks and `updateNode()` for interactivity. App screen ids start at 1000. [BC-033]
 

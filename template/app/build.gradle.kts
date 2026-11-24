@@ -41,7 +41,7 @@ dependencies {
     // The composite build substitutes this coordinate with the local
     // :lvgl-android project. After the library is published to Maven, the
     // same coordinate resolves from the repository without the includeBuild.
-    implementation("com.lvgl.android:lvgl-android:1.0.0")
+    implementation("com.lvgl.android:lvgl-android:1.1.0")
 
     // LvglActivity extends AppCompatActivity and the manifest theme is an
     // AppCompat DayNight theme, so appcompat must be on the app classpath.

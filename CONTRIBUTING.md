@@ -30,6 +30,7 @@ Run the full suite before opening a pull request:
 
 ```powershell
 .\gradlew.bat :lvgl-android:testDebugUnitTest :app:testDebugUnitTest :build-logic:test :lvgl-android:apiCheck
+.\gradlew.bat lintVitalRelease --no-daemon
 powershell -File tools\dynamic-test.ps1
 ```
 

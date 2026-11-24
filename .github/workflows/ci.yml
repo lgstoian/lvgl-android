@@ -107,6 +107,10 @@ jobs:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Hosted runners have no /dev/kvm. Recent emulator binaries refuse
+      # `-accel off` unless this opt-in is set; without it the device never
+      # appears and the runner waits for boot until it times out.
+      ANDROID_I_WANT_MY_TCG: "yes"
       # Mirrors the download path below and the default in tools/ci-dynamic.sh.
       RELEASE_APK: release-apk/app-universal-release.apk
     steps:
@@ -140,6 +144,9 @@ jobs:
         api-level: 36
         arch: x86_64
         profile: pixel_5
+        # No /dev/kvm on hosted runners: API 36 needs longer than the 10-minute
+        # default to boot under software emulation.
+        emulator-boot-timeout: 1500
         script: sh tools/ci-dynamic.sh
     - name: Upload dynamic-test logs
       uses: actions/upload-artifact@v4
@@ -162,6 +169,7 @@ jobs:
     if: failure() && needs.build.result == 'success'
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_I_WANT_MY_TCG: "yes"
       RELEASE_APK: release-apk/app-universal-release.apk
     steps:
     - uses: actions/checkout@v4
@@ -184,4 +192,5 @@ jobs:
         api-level: 34
         arch: x86_64
         profile: pixel_5
+        emulator-boot-timeout: 1500
         script: SMOKE_ONLY=1 sh tools/ci-dynamic.sh

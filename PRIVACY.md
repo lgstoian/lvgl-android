@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: 2026-11-04
+Last updated: 2026-11-24
 
 ## Summary
 
@@ -28,7 +28,8 @@ is read locally from the system package manager and is never transmitted.
 
 The **camera** sample uses the camera only while the sample is open, and only
 after you grant the `CAMERA` permission. Frames are processed locally and are
-never stored or transmitted.
+never stored or transmitted; the sample does not show an on-screen camera
+preview.
 
 ## Permissions
 

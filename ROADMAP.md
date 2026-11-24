@@ -170,7 +170,7 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
   scaffolds a new module (BC-032)
 - `lvgl-android/consumer-rules.pro` keeps the JNI entry points and public API
 - `lvgl-android/api/lvgl-android.api` + `:lvgl-android:apiCheck` gate API changes
-- `maven-publish` coordinates `com.lvgl.android:lvgl-android:1.0.0`
+- `maven-publish` coordinates `com.lvgl.android:lvgl-android:1.1.0`
 - `CHANGELOG.md`, `docs/release-checklist.md`, `tools/bump-version.ps1`
 - Release workflow: signed per-ABI APKs + AAB + `SHA256SUMS.txt`
 

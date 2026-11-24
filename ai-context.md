@@ -767,6 +767,27 @@ pattern honest. See BC-036.
 **Trap**: never widen the pattern to bare `FATAL`, `SIGSEGV` or
 `start timeout` — they match system-process noise on an unaccelerated emulator.
 
+### The Runner's Emulator Refuses `-accel off` Without a TCG Opt-In
+
+**Problem**: on `ubuntu-latest` the Release smoke and the dynamic job timed out
+waiting for boot. `adb` never saw `emulator-5554`; the log showed
+`Software CPU emulation (-accel off) is not supported. A hardware CPU
+accelerator is required (or set ANDROID_I_WANT_MY_TCG=yes to force TCG software
+emulation).`
+
+**Root Cause**: recent emulator binaries (37.x) no longer silently fall back to
+TCG. `android-emulator-runner` passes `-accel off` when `/dev/kvm` is missing, so
+the emulator exits immediately and the runner polls `getprop sys.boot_completed`
+until the default 600 s timeout.
+
+**Fix**: set `ANDROID_I_WANT_MY_TCG: "yes"` in every job that uses
+`android-emulator-runner`, and raise `emulator-boot-timeout` to 1500 s for the
+unaccelerated API 36 image. Neither a longer timeout alone nor a fallback API
+34 job can fix a device that never starts.
+
+**Trap**: do not "fix" this by removing the smoke or marking it
+`continue-on-error` — that would publish an untested artifact.
+
 ### android-emulator-runner Executes the Script Line by Line
 
 **Fact**: the `reactivecircus/android-emulator-runner` `script` input is run one

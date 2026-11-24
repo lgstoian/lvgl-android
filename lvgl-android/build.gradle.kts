@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.lvgl.android"
-version = project.findProperty("lvgl.versionName") as? String ?: "1.0.0"
+version = project.findProperty("lvgl.versionName") as? String ?: "1.1.0"
 
 android {
     namespace = "com.lvgl.android"
@@ -115,7 +115,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.lvgl.android"
                 artifactId = "lvgl-android"
-                version = project.findProperty("lvgl.versionName") as? String ?: "1.0.0"
+                version = project.findProperty("lvgl.versionName") as? String ?: "1.1.0"
 
                 pom {
                     name.set("LVGL Android")

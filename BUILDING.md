@@ -64,6 +64,8 @@ class MyGame : LvglGameActivity() {
 - Android SDK (API 24+)
 - Android NDK r26b
 - CMake 3.22.1 (with share/ directory)
+- Gradle wrapper 8.11.1 with AGP 8.10.1 and Kotlin 1.9.22 (required for
+  compileSdk/targetSdk 36)
 
 ### Build Commands
 ```powershell
@@ -106,7 +108,7 @@ Update the native port code in `lvgl-android/src/main/cpp/lvgl_port.cpp` accordi
 | `LvglInputMethodService` | Base for keyboard apps |
 | `LvglLauncherActivity` | Base for launcher apps |
 | `LvglGameActivity` | Base for games |
-| `LvglCameraPreview` | Camera preview component |
+| `LvglCameraPreview` | Camera capture helper (frames processed locally; no on-screen preview) |
 | `DpiManager` | DPI adaptation |
 | `MultiWindowManager` | Multiwindow support |
 | `LvglThemeBridge` | Theme sync between Material and LVGL |

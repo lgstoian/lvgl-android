@@ -103,15 +103,18 @@ The gates operate on what actually ships, not just the debug build: [BC-037]
   the shipped artifact starts.
 - **Shipped manifest**: inspect the merged manifest inside the release APK, not
   just the source, to confirm only the intended activity is exported.
-- **Toolchain alignment**: AGP and Gradle are upgraded so compileSdk/targetSdk 36
-  is officially supported, and a Gradle check fails on an AGP/SDK mismatch.
+- **Toolchain alignment**: AGP 8.10.1 and Gradle 8.11.1 are used so
+  compileSdk/targetSdk 36 is officially supported, and a Gradle check fails on an
+  AGP/SDK mismatch.
+- **Emulator coverage**: CI emulator jobs use API 36 as the primary image, with
+  API 34 diagnostic fallbacks.
 
 ## Release checklist
 
 1. `tools/bump-version.ps1 -Version X.Y.Z`
 2. Update `CHANGELOG.md`.
-3. Confirm the AGP/Gradle version officially supports the target API (36) — the
-   Gradle AGP/SDK check must pass, with no mismatch warning.
+3. Confirm AGP 8.10.1 / Gradle 8.11.1 officially support the target API (36) —
+   the Gradle AGP/SDK check must pass, with no mismatch warning.
 4. `./gradlew assembleRelease --no-daemon`, then
    `./gradlew bundleRelease -Plvgl.bundleNoSplits=true --no-daemon` (signed with
    the upload key). The bundle step disables ABI splits because `bundleRelease`

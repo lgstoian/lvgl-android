@@ -15,6 +15,9 @@ jobs:
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       ANDROID_HOME: /usr/local/lib/android/sdk
+      # No /dev/kvm on hosted runners: allow TCG software emulation. Without
+      # this the emulator exits before adb ever sees the device.
+      ANDROID_I_WANT_MY_TCG: "yes"
 
     steps:
     - uses: actions/checkout@v4
@@ -98,6 +101,9 @@ jobs:
         api-level: 36
         arch: x86_64
         profile: pixel_5
+        # The hosted runner has no /dev/kvm: an API 36 system image can take
+        # well over the 10-minute default to boot under software emulation.
+        emulator-boot-timeout: 1500
         script: SMOKE_ONLY=1 RELEASE_APK=release-artifacts/app-universal-release.apk sh tools/ci-dynamic.sh
 
     - name: Generate checksums
@@ -109,8 +115,8 @@ jobs:
     - name: Extract release notes
       run: |
         mkdir -p release-artifacts
-        # The 1.0.0 section of the changelog, without the heading.
-        awk '/^## \[1\.0\.0\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md \
+        # The 1.1.0 section of the changelog, without the heading.
+        awk '/^## \[1\.1\.0\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md \
           | sed 's/^### //' > release-artifacts/RELEASE_NOTES.md
         head -20 release-artifacts/RELEASE_NOTES.md
 
@@ -136,6 +142,7 @@ jobs:
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_I_WANT_MY_TCG: "yes"
       RELEASE_APK: smoke-apk/app-universal-release.apk
     steps:
     - uses: actions/checkout@v4
@@ -157,4 +164,5 @@ jobs:
         api-level: 34
         arch: x86_64
         profile: pixel_5
+        emulator-boot-timeout: 1500
         script: SMOKE_ONLY=1 sh tools/ci-dynamic.sh
