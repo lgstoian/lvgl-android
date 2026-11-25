@@ -4,10 +4,10 @@
 # harness (R8/JNI survival in the published artifact, not just in debug).
 #
 # The CI emulator has no KVM (software emulation only) and sometimes comes up
-# offline: the emulator cannot reach the host adb daemon and the device stays
-# "offline" for the rest of the job. Retry the whole sequence when the device is
-# unhealthy; a failure on a healthy device is a real failure and is never
-# retried.
+# unhealthy: adb reports "device offline", or it reports "device" before the
+# system server/package service is ready ("Can't find service: package"). Retry
+# the whole sequence for either condition; a failure on a genuinely healthy
+# device is a real failure and is never retried.
 #
 # android-emulator-runner executes every line of its `script` input as a
 # separate `sh -c`, so this logic must live in a file rather than inline.
@@ -73,6 +73,24 @@ restart_emulator() {
   wait_for_boot || true
 }
 
+# adb can report "device" while Android's package service is still unavailable
+# (a software-emulated API 36 image can take a long time after boot_completed).
+# Such a device is NOT healthy for instrumented tests.
+device_ready() {
+  state="$(adb devices | awk '/emulator-/ {print $2; exit}')"
+  [ "$state" = "device" ] || return 1
+  adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 || return 1
+  probe="$(adb shell cmd package list packages -3 2>&1)"
+  echo "$probe" | grep -q "Can't find service" && return 1
+  return 0
+}
+
+# Markers that only appear when the emulator/adb channel itself is broken, not
+# when the app under test failed.
+unhealthy_log() {
+  grep -Eq "device offline|Can't find service: package|no devices/emulators found|Failed to start Emulator console|Unable to connect to adb daemon" "$1"
+}
+
 run_checks() {
   if [ "$SMOKE_ONLY" = "1" ]; then
     pwsh ./tools/dynamic-test.ps1 \
@@ -92,19 +110,26 @@ attempt=1
 while [ "$attempt" -le "$ATTEMPTS" ]; do
   echo "=== dynamic attempt $attempt/$ATTEMPTS (SMOKE_ONLY=$SMOKE_ONLY) ==="
   adb logcat -c || true
-  if run_checks; then
+  attempt_log="screenshots/dynamic/attempt-$attempt.log"
+  mkdir -p screenshots/dynamic
+  (run_checks) > "$attempt_log" 2>&1
+  status=$?
+  cat "$attempt_log"
+  if [ "$status" -eq 0 ]; then
     echo "=== dynamic checks passed on attempt $attempt"
     exit 0
   fi
 
   echo "=== attempt $attempt failed"
-  state="$(adb devices | awk '/emulator-/ {print $2; exit}')"
-  if [ -n "$state" ] && [ "$state" = "device" ]; then
+  if unhealthy_log "$attempt_log"; then
+    echo "=== emulator/adb channel is unhealthy; recovering"
+  elif device_ready; then
     echo "=== device is healthy; this is a real failure, not an emulator flake"
     exit 1
+  else
+    echo "=== device is not ready for instrumented tests; recovering"
   fi
 
-  echo "=== device state: '${state:-missing}'; recovering"
   restart_emulator
   attempt=$((attempt + 1))
 done
