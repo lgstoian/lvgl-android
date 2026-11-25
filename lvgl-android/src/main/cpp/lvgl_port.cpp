@@ -115,6 +115,10 @@ struct Engine {
      * between two polls, so the press is held until LVGL has observed it.
      * @breadcrumb BC-024 */
     bool touchPressSeen = false;
+    /* Kotlin forwards ACTION_POINTER_DOWN/UP through the same (action,x,y)
+     * entry point. Track the FIRST down as the primary pointer so a second
+     * finger cannot hijack the single-point indev mid-gesture. */
+    bool touchPrimaryActive = false;
 
     lv_display_t* display = nullptr;
     lv_indev_t* indev = nullptr;
@@ -142,11 +146,11 @@ struct Engine {
     int  batteryLevel = -1;
     bool batteryCharging = false;
 
-    /* Real device facts for the dashboard device map (manufacturer, model, SoC,
-     * memory, storage, display, android version, cameras, sensors). Written
-     * from the UI thread, copied onto the LVGL thread by rebuild_screen(). */
+    /* Real device facts for the dashboard device map. Written from the UI
+     * thread, copied onto the LVGL thread by rebuild_screen() / the refresh
+     * task. Index order is the nativeSetDeviceInfo JNI argument order. */
     std::mutex deviceInfoMutex;
-    std::string devInfo[9];
+    std::string devInfo[15];
 
     /* Safe-area insets (px) from Android; the UI kit pads against them. */
     uint32_t insetTop = 0;
@@ -172,6 +176,40 @@ struct Engine {
     }
 };
 
+/* A snapshot owns its strings so ui_set_device_info() never receives pointers
+ * into engine->devInfo after deviceInfoMutex has been released (the UI thread
+ * can overwrite those strings at any time). */
+struct DeviceInfoSnapshot {
+    std::string value[15];
+
+    UiDeviceInfo as_ui() const {
+        UiDeviceInfo info = {};
+        info.manufacturer  = value[0].c_str();
+        info.model         = value[1].c_str();
+        info.soc           = value[2].c_str();
+        info.memory        = value[3].c_str();
+        info.storage       = value[4].c_str();
+        info.display       = value[5].c_str();
+        info.android_version = value[6].c_str();
+        info.cameras       = value[7].c_str();
+        info.sensors       = value[8].c_str();
+        info.modem         = value[9].c_str();
+        info.network       = value[10].c_str();
+        info.battery_tech  = value[11].c_str();
+        info.audio         = value[12].c_str();
+        info.usb           = value[13].c_str();
+        info.bluetooth     = value[14].c_str();
+        return info;
+    }
+};
+
+static DeviceInfoSnapshot snapshot_device_info(Engine* engine) {
+    DeviceInfoSnapshot out;
+    std::lock_guard<std::mutex> lk(engine->deviceInfoMutex);
+    for (int i = 0; i < 15; i++) out.value[i] = engine->devInfo[i];
+    return out;
+}
+
 /* ---- Pixel helpers ------------------------------------------------------- */
 
 /* 32-bit R/B swap. One word per pixel, no branches, vector-friendly. */
@@ -194,12 +232,11 @@ static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t*
         return;
     }
     /* Bail out during teardown so the UI thread never blocks on a lock held by
-     * a dying render thread (fixes the System UI ANR). */
+     * a dying render thread (fixes the System UI ANR). `paused` is deliberately
+     * NOT checked here: a stale onPause from a previous activity must never
+     * blank a freshly bound surface. `windowValid` (cleared by
+     * nativeDeinitDisplay) is the authority on whether a surface is drawable. */
     if (engine->stopping.load()) {
-        lv_display_flush_ready(disp);
-        return;
-    }
-    if (engine->paused.load()) {
         lv_display_flush_ready(disp);
         return;
     }
@@ -208,6 +245,14 @@ static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t*
     ARect bounds = {0, 0, (int32_t)engine->dispWidth, (int32_t)engine->dispHeight};
     if (ANativeWindow_lock(engine->nativeWindow, &buffer, &bounds) < 0) {
         engine->setError("ANativeWindow_lock failed");
+        lv_display_flush_ready(disp);
+        return;
+    }
+    /* Re-check after the lock: teardown may have begun while we were blocked
+     * in ANativeWindow_lock. Always hand the buffer back so the render thread
+     * can exit and the UI thread's join cannot wedge (BC-002). */
+    if (engine->stopping.load() || !engine->windowValid.load()) {
+        ANativeWindow_unlockAndPost(engine->nativeWindow);
         lv_display_flush_ready(disp);
         return;
     }
@@ -222,8 +267,10 @@ static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t*
     uint32_t* dst = static_cast<uint32_t*>(buffer.bits);
     const uint32_t* src = reinterpret_cast<const uint32_t*>(px_map);
 
-    if (dst_stride_px == src_stride_px) {
-        /* Common case: contiguous copy + swap in one pass. */
+    if (dst_stride_px == src_stride_px && copy_w == engine->dispWidth) {
+        /* Common case: the window is at least as wide as the display and both
+         * buffers are tightly packed. A narrower window has a shorter row but
+         * the same stride, so it must take the row-by-row path below. */
         copy_pixels_rb_swap(dst, src, copy_w * copy_h);
     } else {
         for (uint32_t y = 0; y < copy_h; y++) {
@@ -271,7 +318,7 @@ extern Engine* g_activeEngine;   // defined just below
 static void nav_to_hook(int screenId) {
     __android_log_print(ANDROID_LOG_INFO, "LVGLPort", "nav_to_hook id=%d engine=%p", screenId, (void*)g_activeEngine);
     if (!g_activeEngine) return;
-    if (screenId < 0 || screenId >= SCREEN_COUNT) return;
+    if (screenId < 0 || (screenId >= SCREEN_COUNT && screenId < APP_SCREEN_BASE)) return;
     std::lock_guard<std::mutex> lock(g_activeEngine->navMutex);
     g_activeEngine->navRequest = screenId;
     g_activeEngine->cv.notify_all();
@@ -292,11 +339,16 @@ Engine* g_activeEngine = nullptr;
  * (screen id >= 0) or the back sentinel (-2) to the registered Kotlin
  * navigator via the global g_navigator. */
 static void drainNavRequests(Engine* engine) {
-    std::lock_guard<std::mutex> lock(engine->navMutex);
-    if (engine->navRequest == -1) return;
-    int id = engine->navRequest;
-    engine->navRequest = -1;
+    int id;
+    {
+        std::lock_guard<std::mutex> lock(engine->navMutex);
+        id = engine->navRequest;
+        engine->navRequest = -1;
+    }
+    if (id == -1) return;
     __android_log_print(ANDROID_LOG_INFO, "LVGLPort", "drainNav id=%d valid=%d", id, nav_valid());
+    /* Call Kotlin without holding navMutex: a JNI callback that re-enters
+     * native (e.g. a screen rebuild) would deadlock on the same mutex. */
     if (id == -2) {
         nav_back();
     } else if (id >= 0 && nav_valid()) {
@@ -319,23 +371,11 @@ static void rebuild_screen(Engine* engine, int screen_id) {
         status_text = engine->lastStatusText;
         status_screen = engine->lastStatusScreen;
     }
-    /* Push the real device facts onto the LVGL thread before the build. */
-    {
-        UiDeviceInfo info;
-        {
-            std::lock_guard<std::mutex> lk(engine->deviceInfoMutex);
-            info.manufacturer    = engine->devInfo[0].c_str();
-            info.model           = engine->devInfo[1].c_str();
-            info.soc             = engine->devInfo[2].c_str();
-            info.memory          = engine->devInfo[3].c_str();
-            info.storage         = engine->devInfo[4].c_str();
-            info.display         = engine->devInfo[5].c_str();
-            info.android_version = engine->devInfo[6].c_str();
-            info.cameras         = engine->devInfo[7].c_str();
-            info.sensors         = engine->devInfo[8].c_str();
-        }
-        ui_set_device_info(info);
-    }
+    /* Push the real device facts onto the LVGL thread before the build. Snapshot
+     * first: without this, a concurrent push from Kotlin could reallocate a
+     * string while ui_set_device_info() was reading its c_str(). */
+    DeviceInfoSnapshot device_info = snapshot_device_info(engine);
+    ui_set_device_info(device_info.as_ui());
     /* launch_screen() (demo_ui.cpp) cleans + builds the requested screen. */
     launch_screen(screen_id, dpi, theme);
     {
@@ -363,8 +403,15 @@ static void lvgl_thread_func(Engine* engine) {
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     uint32_t last_frame_tick = lv_tick_get();
     /* Reset the animation engine so stale animations from a prior session
-     * (e.g. an activity that was destroyed without draining) never replay. */
-    lvgl_anim::Engine::instance().reset();
+     * (e.g. an activity that was destroyed without draining) never replay.
+     * The showcase screen is built before the thread starts and its frame
+     * callback is still live, so keep that callback in this one case. */
+    bool showcase_built;
+    {
+        std::lock_guard<std::mutex> state_lock(engine->stateMutex);
+        showcase_built = engine->currentScreenId == SCREEN_SHOWCASE;
+    }
+    lvgl_anim::Engine::instance().reset(showcase_built);
 
     while (engine->running.load()) {
         {
@@ -381,7 +428,8 @@ static void lvgl_thread_func(Engine* engine) {
          * both showed the wrong screen and stalled the UI thread (ANR). */
         if (engine->pendingWindowSet) {
             std::lock_guard<std::mutex> lock(engine->mutex);
-            if (engine->pendingWindowSet) {
+            if (engine->pendingWindowSet && !engine->stopping.load() &&
+                engine->running.load()) {
                 if (engine->nativeWindow && engine->nativeWindow != engine->pendingWindow) {
                     ANativeWindow_release(engine->nativeWindow);
                 }
@@ -394,7 +442,10 @@ static void lvgl_thread_func(Engine* engine) {
             }
         }
 
-        if (engine->paused.load()) continue;
+        /* A stale onPause from the outgoing activity can arrive after the new
+         * surface was bound. `paused` must not defer tasks, timers, navigation
+         * or input polling: the flush callback already gates drawing on
+         * windowValid, so the engine stays alive and responsive (S4). */
 
         /* Drain all queued tasks for this tick. */
         {
@@ -409,7 +460,7 @@ static void lvgl_thread_func(Engine* engine) {
             }
         }
 
-        if (!engine->running.load() || engine->paused.load()) continue;
+        if (!engine->running.load()) break;
 
         /* Flush any pending native->Kotlin navigation requests. */
         drainNavRequests(engine);
@@ -428,7 +479,7 @@ static void lvgl_thread_func(Engine* engine) {
         }
 
         /* If LVGL asks for a shorter wait than our tick, honour it up to 50ms. */
-        if (since > 0 && since < 50 && !engine->paused.load()) {
+        if (since > 0 && since < 50) {
             std::this_thread::sleep_for(std::chrono::milliseconds(since));
         }
     }
@@ -438,9 +489,16 @@ static void lvgl_thread_func(Engine* engine) {
 /* ---- Engine construction / teardown -------------------------------------- */
 
 static bool init_display(Engine* engine) {
-    lv_init();
-    lv_log_register_print_cb(lv_log_to_logcat);
-    lv_tick_set_cb(tick_get_cb);
+    /* LVGL is process-wide: a genuine size change tears down the display but
+     * NOT the library. Calling lv_init() again logs "already initialized" and
+     * can leave stale global state (the black-surface race). */
+    static bool s_lvInitialized = false;
+    if (!s_lvInitialized) {
+        lv_init();
+        lv_log_register_print_cb(lv_log_to_logcat);
+        lv_tick_set_cb(tick_get_cb);
+        s_lvInitialized = true;
+    }
 
     engine->display = lv_display_create(engine->dispWidth, engine->dispHeight);
     if (!engine->display) {
@@ -483,6 +541,11 @@ static bool init_display(Engine* engine) {
 }
 
 static void shutdown_display(Engine* engine) {
+    /* Free showcase-owned LVGL objects and their frame callback BEFORE LVGL
+     * deletes the display/screens. After lv_display_delete() they would be
+     * dangling pointers and the next animation tick would use freed memory. */
+    ui_reset_showcase();
+    lvgl_anim::Engine::instance().reset();
     if (engine->display) {
         lv_display_delete(engine->display);
         engine->display = nullptr;
@@ -519,14 +582,8 @@ using namespace lvgl_android;
 /* ---- JNI plumbing --------------------------------------------------------- */
 
 static JavaVM* g_vm = nullptr;
-static jobject g_navRef = nullptr;          // global ref to Kotlin ScreenNavigator
-static jmethodID g_midNavTo = nullptr;       // navigateTo(int)
-static jmethodID g_midNavBack = nullptr;     // navigateBack()
-/* Optional system-control methods (dashboard backlight / volume panels).
- * Resolved only when the registered navigator implements them. */
-static jmethodID g_midSetBrightness = nullptr;   // setBrightness(float)
-static jmethodID g_midSetVolume = nullptr;       // setVolumePercent(int)
-static jmethodID g_midToggleDarkMode = nullptr;  // toggleDarkMode()
+/* Cached callbacks live in g_navCallback / g_uiCallback / g_launcherCallback
+ * above; every access is guarded by g_jniMutex. */
 
 static JNIEnv* jniEnv() {
     JNIEnv* env = nullptr;
@@ -545,6 +602,50 @@ static JNIEnv* jniEnv() {
 static Engine* fromHandle(jlong handle) {
     return reinterpret_cast<Engine*>(static_cast<intptr_t>(handle));
 }
+
+/* All cached JNI global references and method IDs are written from the UI
+ * thread and read from the LVGL thread. Guard them with one mutex and hand out
+ * shared_ptr snapshots: a listener replaced mid-dispatch stays alive until the
+ * LVGL thread has finished its JNI call (C2). */
+static std::mutex g_jniMutex;
+
+struct NavCallback {
+    jobject ref = nullptr;
+    jmethodID to = nullptr;
+    jmethodID back = nullptr;
+    jmethodID brightness = nullptr;
+    jmethodID volume = nullptr;
+    jmethodID theme = nullptr;
+    ~NavCallback() {
+        if (ref) {
+            if (JNIEnv* e = jniEnv()) e->DeleteGlobalRef(ref);
+        }
+    }
+};
+
+struct UiCallback {
+    jobject ref = nullptr;
+    jmethodID event = nullptr;
+    ~UiCallback() {
+        if (ref) {
+            if (JNIEnv* e = jniEnv()) e->DeleteGlobalRef(ref);
+        }
+    }
+};
+
+struct LauncherCallback {
+    jobject ref = nullptr;
+    jmethodID selected = nullptr;
+    ~LauncherCallback() {
+        if (ref) {
+            if (JNIEnv* e = jniEnv()) e->DeleteGlobalRef(ref);
+        }
+    }
+};
+
+static std::shared_ptr<NavCallback> g_navCallback;
+static std::shared_ptr<UiCallback> g_uiCallback;
+static std::shared_ptr<LauncherCallback> g_launcherCallback;
 
 JNIEXPORT jint JNICALL
 JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
@@ -581,29 +682,30 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDestroy(JNIEnv* /*env*/, jobject /
     if (engine->lvglThread.joinable()) {
         engine->lvglThread.join();
     }
+    /* No render thread can tick the callback now. Drop it before lv_deinit(),
+     * even when no display was ever created. */
+    ui_reset_showcase();
     lvgl_anim::Engine::instance().reset();
 
     if (engine->initialized) {
         shutdown_display(engine);
     }
     if (g_activeEngine == engine) g_activeEngine = nullptr;
-    /* Release the Kotlin navigator global ref so it does not outlive the engine. */
-    if (g_navRef) {
-        if (JNIEnv* env = jniEnv()) {
-            env->DeleteGlobalRef(g_navRef);
-        }
-        g_navRef = nullptr;
+    /* Drop cached global refs once no render thread can dispatch them. */
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        g_navCallback.reset();
+        g_uiCallback.reset();
+        g_launcherCallback.reset();
     }
-    g_midNavTo = nullptr;
-    g_midNavBack = nullptr;
-    g_midSetBrightness = nullptr;
-    g_midSetVolume = nullptr;
     lv_deinit();
     delete engine;
     LOGI("Engine destroyed");
 }
 
 /* ---- Display init / deinit ---------------------------------------------- */
+
+static void scheduleTask(Engine* engine, std::function<void()> task);
 
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /*thiz*/,
@@ -640,21 +742,46 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /
          * display, screen and LVGL thread alive and only rebind the surface.
          * This is what makes each activity show its own screen immediately
          * instead of rebuilding/re-destroying the display. */
+        bool dpi_changed = false;
         {
             std::lock_guard<std::mutex> state_lock(engine->stateMutex);
-            engine->dpi = dpi > 0 ? dpi : engine->dpi;
+            const int new_dpi = dpi > 0 ? dpi : engine->dpi;
+            dpi_changed = engine->dpi != new_dpi;
+            engine->dpi = new_dpi;
             if (engine->display) lv_display_set_dpi(engine->display, engine->dpi);
         }
         {
             std::lock_guard<std::mutex> lock(engine->mutex);
-            if (engine->pendingWindow && engine->pendingWindow != window) {
+            /* C7: fromSurface returns a NEW reference. When the very same
+             * ANativeWindow pointer is reacquired we already own a reference —
+             * drop the extra one instead of leaking it. */
+            if (window == engine->pendingWindow || window == engine->nativeWindow) {
+                ANativeWindow_release(window);
+            } else if (engine->pendingWindow) {
                 ANativeWindow_release(engine->pendingWindow);
             }
             engine->pendingWindow = window;
             engine->pendingWindowSet = true;
         }
-        engine->paused = false;
+        /* A stale deinit may have set stopping/paused; a live surface request
+         * always wins. */
+        engine->stopping = false;
+        engine->paused   = false;
+        g_activeEngine   = engine;
         engine->cv.notify_all();
+        /* DPI drives spacing and fonts, so a density change needs a rebuild
+         * even when the pixel size is unchanged (S5). */
+        if (dpi_changed) {
+            int screen_id;
+            {
+                std::lock_guard<std::mutex> state_lock(engine->stateMutex);
+                screen_id = engine->pendingScreenId < 0 ? engine->currentScreenId
+                                                        : engine->pendingScreenId;
+            }
+            scheduleTask(engine, [engine, screen_id]() {
+                rebuild_screen(engine, screen_id);
+            });
+        }
         LOGI("display surface rebound %dx%d", width, height);
         return;
     }
@@ -667,7 +794,7 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /
         if (engine->lvglThread.joinable()) {
             engine->lvglThread.join();
         }
-        shutdown_display(engine);
+        shutdown_display(engine);   /* releases the previous window reference */
     }
 
     engine->dispWidth  = static_cast<uint32_t>(width);
@@ -677,12 +804,14 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /
         std::lock_guard<std::mutex> state_lock(engine->stateMutex);
         engine->dpi = dpi > 0 ? dpi : 440;
     }
-    /* Release a stale pending window before overwriting it (leak fix). */
-    if (engine->pendingWindow && engine->pendingWindow != window) {
-        ANativeWindow_release(engine->pendingWindow);
+    /* shutdown_display cleared any stale pending window; install the freshly
+     * acquired reference (do not drop it even if the pointer matches the old
+     * nativeWindow — that reference was just released above). */
+    {
+        std::lock_guard<std::mutex> lock(engine->mutex);
+        engine->pendingWindow = window;
+        engine->pendingWindowSet = true;
     }
-    engine->pendingWindow = window;
-    engine->pendingWindowSet = true;
 
     int screen_to_build;
     {
@@ -726,8 +855,30 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, job
      * but KEEP the display, current screen and LVGL thread alive so the next
      * activity can simply rebind its surface. Joining the render thread from
      * the UI thread here is what used to wedge the app (start-timeout ANR). */
+    /* A surface that is being destroyed may have left a pending window behind
+     * (initDisplay queued it but the render thread never installed it). Release
+     * it here, otherwise it leaks and can be installed onto the next surface. */
+    {
+        std::lock_guard<std::mutex> lock(engine->mutex);
+        if (engine->pendingWindow) {
+            ANativeWindow_release(engine->pendingWindow);
+            engine->pendingWindow = nullptr;
+        }
+        engine->pendingWindowSet = false;
+    }
     engine->windowValid = false;
     engine->paused = true;
+    /* Stop before the next lock attempt so an in-flight ANativeWindow_lock
+     * cannot wedge a later join (S2). nativeInitDisplay clears this again. */
+    engine->stopping = true;
+    /* Only forget the engine when no new surface has taken over; a stale
+     * deinit must not clear the bridge used by the live activity (BC-001). */
+    bool has_surface;
+    {
+        std::lock_guard<std::mutex> lock(engine->mutex);
+        has_surface = engine->pendingWindowSet;
+    }
+    if (!has_surface && g_activeEngine == engine) g_activeEngine = nullptr;
     engine->cv.notify_all();
     LOGI("LVGL surface released");
 }
@@ -762,12 +913,36 @@ Java_com_lvgl_android_engine_LvglEngine_nativeTouchEvent(JNIEnv* /*env*/, jobjec
     auto* engine = fromHandle(handle);
     if (!engine) return;
     std::lock_guard<std::mutex> lock(engine->touchMutex);
-    engine->touchState = (action == 0 || action == 2)
-                             ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
-    engine->touchPoint.x = static_cast<lv_coord_t>(x);
-    engine->touchPoint.y = static_cast<lv_coord_t>(y);
+    if (action == 0) {
+        /* ACTION_DOWN starts a gesture; a secondary ACTION_POINTER_DOWN while
+         * the primary is still down must not move the point (C13). */
+        if (engine->touchPrimaryActive) return;
+        engine->touchPrimaryActive = true;
+        engine->touchPressSeen = false;
+        engine->touchPoint.x = static_cast<lv_coord_t>(x);
+        engine->touchPoint.y = static_cast<lv_coord_t>(y);
+        engine->touchState = LV_INDEV_STATE_PRESSED;
+    } else if (action == 2) {
+        /* ACTION_MOVE is delivered with pointerIndex 0 (the primary pointer). */
+        if (!engine->touchPrimaryActive) return;
+        engine->touchPoint.x = static_cast<lv_coord_t>(x);
+        engine->touchPoint.y = static_cast<lv_coord_t>(y);
+        engine->touchState = LV_INDEV_STATE_PRESSED;
+    } else {
+        /* ACTION_UP / POINTER_UP / CANCEL releases the primary pointer. Kotlin
+         * maps POINTER_UP to the same action, so ignore an UP that lands far
+         * from the tracked point: that is a secondary finger lifting. */
+        const int tolerance = engine->dpi > 0 ? engine->dpi / 10 : 16;
+        const int dx = static_cast<int>(x) - static_cast<int>(engine->touchPoint.x);
+        const int dy = static_cast<int>(y) - static_cast<int>(engine->touchPoint.y);
+        if (engine->touchPrimaryActive &&
+            (dx < -tolerance || dx > tolerance || dy < -tolerance || dy > tolerance)) {
+            return;
+        }
+        engine->touchPrimaryActive = false;
+        engine->touchState = LV_INDEV_STATE_RELEASED;
+    }
     engine->touchNew = true;
-    if (action == 0) engine->touchPressSeen = false;
 }
 
 /* ---- Screen / status / theme -------------------------------------------- */
@@ -823,10 +998,9 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetStatusText(JNIEnv* env, jobject
             engine->lastStatusText = copy;
             engine->lastStatusScreen = engine->currentScreenId;
         }
-        /* demo_ui stores the status label in the screen's user data. */
-        lv_obj_t* screen = lv_screen_active();
-        if (!screen) return;
-        lv_obj_t* status = static_cast<lv_obj_t*>(lv_obj_get_user_data(screen));
+        /* demo_ui clears this pointer in launch_screen() before every build,
+         * so it never refers to a label from a previously built screen. */
+        lv_obj_t* status = ui_current_status_label();
         if (status) {
             lv_label_set_text(status, copy.c_str());
             lv_obj_invalidate(status);
@@ -879,9 +1053,14 @@ Java_com_lvgl_android_engine_LvglEngine_nativeApplyTheme(JNIEnv* env, jobject /*
     }
     {
         std::lock_guard<std::mutex> state_lock(engine->stateMutex);
+        /* Compare every tonal role, not just primary: a Material You update
+         * can change surfaces/text/container roles while primary stays equal
+         * (S10). */
         changed = !engine->theme.applied ||
-                  engine->theme.dark_mode != theme.dark_mode ||
-                  engine->theme.primary   != theme.primary;
+                  engine->theme.dark_mode != theme.dark_mode;
+        for (int i = 0; !changed && i < MATERIAL_ROLE_COUNT; i++) {
+            changed = engine->theme.roles[i] != theme.roles[i];
+        }
         engine->theme = theme;
     }
     /* Rebuilding is only needed when the palette actually changed; otherwise
@@ -952,27 +1131,33 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDumpLayoutReport(JNIEnv* env, jobj
     auto* engine = fromHandle(handle);
     if (!engine || !engine->display) return env->NewStringUTF("{\"issues\":[]}");
 
-    std::mutex m;
-    std::condition_variable cv;
-    bool done = false;
-    std::string result;
-    scheduleTask(engine, [&]() {
+    /* Own the result in a shared_ptr: a timed-out caller must not leave the
+     * queued lambda holding dangling references to stack locals (C3). */
+    struct ReportSlot {
+        std::mutex m;
+        std::condition_variable cv;
+        bool done = false;
+        std::string result = "{\"issues\":[]}";
+    };
+    auto slot = std::make_shared<ReportSlot>();
+    scheduleTask(engine, [slot]() {
         char buf[2048];
         ui_layout_report_json(lv_screen_active(), buf, sizeof(buf));
-        result = buf;
         {
-            std::lock_guard<std::mutex> lk(m);
-            done = true;
+            std::lock_guard<std::mutex> lk(slot->m);
+            slot->result = buf;
+            slot->done = true;
         }
-        cv.notify_all();
+        slot->cv.notify_all();
     });
-    std::unique_lock<std::mutex> lk(m);
-    cv.wait_for(lk, std::chrono::seconds(2), [&] { return done; });
-    return env->NewStringUTF(result.c_str());
+    std::unique_lock<std::mutex> lk(slot->m);
+    slot->cv.wait_for(lk, std::chrono::seconds(2), [slot] { return slot->done; });
+    return env->NewStringUTF(slot->result.c_str());
 }
 
 /* Store the real device facts for the dashboard device map. Plain string copy:
- * no LVGL objects are touched here, so it is safe from the UI thread. */
+ * no LVGL objects are touched here, so it is safe from the UI thread. Exactly
+ * 15 fields, in the order declared by the Kotlin bridge. */
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeSetDeviceInfo(JNIEnv* env, jobject /*thiz*/,
                                                             jlong handle,
@@ -984,18 +1169,54 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetDeviceInfo(JNIEnv* env, jobject
                                                             jstring display,
                                                             jstring androidVersion,
                                                             jstring cameras,
-                                                            jstring sensors) {
+                                                            jstring sensors,
+                                                             jstring modem,
+                                                             jstring network,
+                                                             jstring batteryTech,
+                                                             jstring audio,
+                                                             jstring usb,
+                                                             jstring bluetooth) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
 
-    jstring fields[9] = { manufacturer, model, soc, memory, storage, display,
-                          androidVersion, cameras, sensors };
+    jstring fields[15] = {
+        manufacturer, model, soc, memory, storage, display, androidVersion,
+        cameras, sensors, modem, network, batteryTech, audio, usb, bluetooth
+    };
     std::lock_guard<std::mutex> lk(engine->deviceInfoMutex);
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 15; i++) {
         const char* raw = fields[i] ? env->GetStringUTFChars(fields[i], nullptr) : nullptr;
         engine->devInfo[i] = raw ? raw : "";
         if (raw) env->ReleaseStringUTFChars(fields[i], raw);
     }
+}
+
+/* Hardware detection can complete after the dashboard was built (permissions,
+ * async callbacks). Re-push the cached strings and rebuild the active screen
+ * on the LVGL thread so the device map shows the real values. */
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeRefreshDeviceInfo(JNIEnv* /*env*/,
+                                                                jobject /*thiz*/,
+                                                                jlong handle) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+    bool has_display;
+    {
+        std::lock_guard<std::mutex> lock(engine->mutex);
+        has_display = engine->display != nullptr;
+    }
+    if (!has_display) return;
+    scheduleTask(engine, [engine]() {
+        if (!engine->display) return;
+        DeviceInfoSnapshot device_info = snapshot_device_info(engine);
+        ui_set_device_info(device_info.as_ui());
+        int screen_id;
+        {
+            std::lock_guard<std::mutex> state_lock(engine->stateMutex);
+            screen_id = engine->currentScreenId;
+        }
+        rebuild_screen(engine, screen_id);
+    });
 }
 
 /* ---- Navigation bridge (native -> Kotlin) --------------------------------- */
@@ -1008,41 +1229,38 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetDeviceInfo(JNIEnv* env, jobject
 JNIEXPORT void JNICALL
 Java_com_lvgl_android_engine_LvglEngine_nativeSetNavCallback(JNIEnv* env, jobject /*thiz*/,
                                                           jlong /*handle*/, jobject navigator) {
-    if (g_navRef) {
-        env->DeleteGlobalRef(g_navRef);
-        g_navRef = nullptr;
+    auto next = std::make_shared<NavCallback>();
+    if (navigator) {
+        next->ref = env->NewGlobalRef(navigator);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            next->ref = nullptr;
+        }
     }
-    g_midNavTo = nullptr;
-    g_midNavBack = nullptr;
-    g_midSetBrightness = nullptr;
-    g_midSetVolume = nullptr;
-    g_midToggleDarkMode = nullptr;
-    if (!navigator) return;
-    g_navRef = env->NewGlobalRef(navigator);
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        g_navRef = nullptr;
-        return;
+    if (next->ref) {
+        jclass cls = env->GetObjectClass(next->ref);
+        if (!cls || env->ExceptionCheck()) {
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        } else {
+            next->to = env->GetMethodID(cls, "navigateTo", "(I)V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            next->back = env->GetMethodID(cls, "navigateBack", "()V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            /* Optional: not every navigator implements the system controls. */
+            next->brightness = env->GetMethodID(cls, "setBrightness", "(F)V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            next->volume = env->GetMethodID(cls, "setVolumePercent", "(I)V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            next->theme = env->GetMethodID(cls, "toggleDarkMode", "()V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        }
     }
-    jclass cls = env->GetObjectClass(g_navRef);
-    if (!cls || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return;
+    const bool has_system = next->brightness && next->volume;
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        g_navCallback = std::move(next);
     }
-    g_midNavTo   = env->GetMethodID(cls, "navigateTo", "(I)V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    g_midNavBack = env->GetMethodID(cls, "navigateBack", "()V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    /* Optional: not every navigator implements the system controls. */
-    g_midSetBrightness = env->GetMethodID(cls, "setBrightness", "(F)V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    g_midSetVolume = env->GetMethodID(cls, "setVolumePercent", "(I)V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    /* Optional: not every navigator implements the theme toggle. */
-    g_midToggleDarkMode = env->GetMethodID(cls, "toggleDarkMode", "()V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    LOGI("navigation callback registered%s",
-         (g_midSetBrightness && g_midSetVolume) ? " (+system controls)" : "");
+    LOGI("navigation callback registered%s", has_system ? " (+system controls)" : "");
 }
 
 /* ---- App-defined screen bridge (Kotlin -> native) ------------------------- */
@@ -1107,7 +1325,11 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetLauncherApps(JNIEnv* env, jobje
                                                               jobjectArray packages) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
-    const jsize n = labels ? env->GetArrayLength(labels) : 0;
+    const jsize label_count = labels ? env->GetArrayLength(labels) : 0;
+    const jsize package_count = packages ? env->GetArrayLength(packages) : 0;
+    /* The two arrays come from separate Kotlin collections; never assume they
+     * have the same length (C14). */
+    const jsize n = label_count < package_count ? label_count : package_count;
     std::vector<std::string> lbls;
     std::vector<std::string> pkgs;
     lbls.reserve(static_cast<size_t>(n));
@@ -1123,6 +1345,7 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetLauncherApps(JNIEnv* env, jobje
         if (pc) env->ReleaseStringUTFChars(p, pc);
         if (l) env->DeleteLocalRef(l);
         if (p) env->DeleteLocalRef(p);
+        if (env->ExceptionCheck()) env->ExceptionClear();
     }
     std::vector<const char*> lbl_ptrs;
     std::vector<const char*> pkg_ptrs;
@@ -1140,31 +1363,51 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetLauncherListener(JNIEnv* env, j
     set_launcher_listener(env, listener);
 }
 
+static std::shared_ptr<NavCallback> nav_snapshot() {
+    std::lock_guard<std::mutex> lock(g_jniMutex);
+    return g_navCallback;
+}
+
 static bool nav_valid() {
-    return g_vm && g_navRef && g_midNavTo && g_midNavBack;
+    if (!g_vm) return false;
+    auto cb = nav_snapshot();
+    return cb && cb->ref && cb->to && cb->back;
 }
 
 static void nav_to(int screenId) {
+    auto cb = nav_snapshot();
+    if (!cb || !cb->ref || !cb->to) return;
     JNIEnv* env = jniEnv();
     if (!env) return;
-    env->CallVoidMethod(g_navRef, g_midNavTo, static_cast<jint>(screenId));
+    /* Copy the reference and method id locally: the shared_ptr keeps the
+     * global ref alive even if Kotlin re-registers during this call (C2). */
+    jobject ref = cb->ref;
+    jmethodID mid = cb->to;
+    env->CallVoidMethod(ref, mid, static_cast<jint>(screenId));
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 static void nav_back() {
+    auto cb = nav_snapshot();
+    if (!cb || !cb->ref || !cb->back) return;
     JNIEnv* env = jniEnv();
     if (!env) return;
-    env->CallVoidMethod(g_navRef, g_midNavBack);
+    jobject ref = cb->ref;
+    jmethodID mid = cb->back;
+    env->CallVoidMethod(ref, mid);
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 /* System-control bridge used by the dashboard's backlight / volume panels.
  * The Kotlin side applies the real Android window / AudioManager change. */
 static void sys_set_brightness(int percent) {
+    auto cb = nav_snapshot();
+    if (!cb || !cb->ref || !cb->brightness) return;
     JNIEnv* env = jniEnv();
-    if (!env || !g_navRef || !g_midSetBrightness) return;
-    env->CallVoidMethod(g_navRef, g_midSetBrightness,
-                        static_cast<jfloat>(percent / 100.0f));
+    if (!env) return;
+    jobject ref = cb->ref;
+    jmethodID mid = cb->brightness;
+    env->CallVoidMethod(ref, mid, static_cast<jfloat>(percent / 100.0f));
     if (env->ExceptionCheck()) {
         LOGE("setBrightness JNI call failed");
         env->ExceptionClear();
@@ -1172,18 +1415,26 @@ static void sys_set_brightness(int percent) {
 }
 
 static void sys_set_volume(int percent) {
+    auto cb = nav_snapshot();
+    if (!cb || !cb->ref || !cb->volume) return;
     JNIEnv* env = jniEnv();
-    if (!env || !g_navRef || !g_midSetVolume) return;
-    env->CallVoidMethod(g_navRef, g_midSetVolume, static_cast<jint>(percent));
+    if (!env) return;
+    jobject ref = cb->ref;
+    jmethodID mid = cb->volume;
+    env->CallVoidMethod(ref, mid, static_cast<jint>(percent));
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 /* Theme bridge used by the dashboard's theme FAB. The Kotlin side flips the
  * app-local dark-mode override and pushes the new palette to LVGL. */
 static void toggle_dark_mode() {
+    auto cb = nav_snapshot();
+    if (!cb || !cb->ref || !cb->theme) return;
     JNIEnv* env = jniEnv();
-    if (!env || !g_navRef || !g_midToggleDarkMode) return;
-    env->CallVoidMethod(g_navRef, g_midToggleDarkMode);
+    if (!env) return;
+    jobject ref = cb->ref;
+    jmethodID mid = cb->theme;
+    env->CallVoidMethod(ref, mid);
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
@@ -1193,30 +1444,29 @@ static void toggle_dark_mode() {
  * through here. The listener is a LvglUiEventReceiver, whose onUiEvent method
  * is resolved once and cached.
  */
-static jobject  g_uiListener = nullptr;
-static jmethodID g_midUiEvent = nullptr;
-
 static void set_ui_listener(JNIEnv* env, jobject listener) {
-    if (g_uiListener) {
-        env->DeleteGlobalRef(g_uiListener);
-        g_uiListener = nullptr;
+    auto next = std::make_shared<UiCallback>();
+    if (listener) {
+        next->ref = env->NewGlobalRef(listener);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            next->ref = nullptr;
+        }
     }
-    g_midUiEvent = nullptr;
-    if (!listener) return;
-    g_uiListener = env->NewGlobalRef(listener);
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        g_uiListener = nullptr;
-        return;
+    if (next->ref) {
+        jclass cls = env->GetObjectClass(next->ref);
+        if (!cls || env->ExceptionCheck()) {
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        } else {
+            next->event = env->GetMethodID(cls, "onUiEvent",
+                                           "(ILjava/lang/String;Ljava/lang/String;I)V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        }
     }
-    jclass cls = env->GetObjectClass(g_uiListener);
-    if (!cls || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return;
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        g_uiCallback = std::move(next);
     }
-    g_midUiEvent = env->GetMethodID(cls, "onUiEvent",
-                                    "(ILjava/lang/String;Ljava/lang/String;I)V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 } /* extern "C" */
@@ -1226,12 +1476,20 @@ namespace lvgl_android {
 /* Defined outside extern "C" so it matches the C++ declaration in demo_ui.h;
  * the JNI listener state above is file-static and therefore reachable. */
 void ui_emit_event(int screen_id, const char* node_id, const char* type, int value) {
-    if (!g_vm || !g_uiListener || !g_midUiEvent) return;
+    if (!g_vm) return;
+    std::shared_ptr<UiCallback> cb;
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        cb = g_uiCallback;
+    }
+    if (!cb || !cb->ref || !cb->event) return;
     JNIEnv* env = jniEnv();
     if (!env) return;
+    jobject ref = cb->ref;
+    jmethodID mid = cb->event;
     jstring jid   = env->NewStringUTF(node_id ? node_id : "");
     jstring jtype = env->NewStringUTF(type ? type : "");
-    env->CallVoidMethod(g_uiListener, g_midUiEvent, static_cast<jint>(screen_id),
+    env->CallVoidMethod(ref, mid, static_cast<jint>(screen_id),
                         jid, jtype, static_cast<jint>(value));
     env->DeleteLocalRef(jid);
     env->DeleteLocalRef(jtype);
@@ -1241,39 +1499,46 @@ void ui_emit_event(int screen_id, const char* node_id, const char* type, int val
 } /* namespace lvgl_android */
 
 /* ---- Launcher app selection (native -> Kotlin) ---------------------------- */
-static jobject  g_launcherListener = nullptr;
-static jmethodID g_midAppSelected = nullptr;
-
 static void set_launcher_listener(JNIEnv* env, jobject listener) {
-    if (g_launcherListener) {
-        env->DeleteGlobalRef(g_launcherListener);
-        g_launcherListener = nullptr;
+    auto next = std::make_shared<LauncherCallback>();
+    if (listener) {
+        next->ref = env->NewGlobalRef(listener);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            next->ref = nullptr;
+        }
     }
-    g_midAppSelected = nullptr;
-    if (!listener) return;
-    g_launcherListener = env->NewGlobalRef(listener);
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        g_launcherListener = nullptr;
-        return;
+    if (next->ref) {
+        jclass cls = env->GetObjectClass(next->ref);
+        if (!cls || env->ExceptionCheck()) {
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        } else {
+            next->selected = env->GetMethodID(cls, "onAppSelected", "(Ljava/lang/String;)V");
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        }
     }
-    jclass cls = env->GetObjectClass(g_launcherListener);
-    if (!cls || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return;
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        g_launcherCallback = std::move(next);
     }
-    g_midAppSelected = env->GetMethodID(cls, "onAppSelected", "(Ljava/lang/String;)V");
-    if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 namespace lvgl_android {
 
 void ui_emit_launcher_event(const char* package_name) {
-    if (!g_vm || !g_launcherListener || !g_midAppSelected) return;
+    if (!g_vm) return;
+    std::shared_ptr<LauncherCallback> cb;
+    {
+        std::lock_guard<std::mutex> lock(g_jniMutex);
+        cb = g_launcherCallback;
+    }
+    if (!cb || !cb->ref || !cb->selected) return;
     JNIEnv* env = jniEnv();
     if (!env) return;
+    jobject ref = cb->ref;
+    jmethodID mid = cb->selected;
     jstring jpkg = env->NewStringUTF(package_name ? package_name : "");
-    env->CallVoidMethod(g_launcherListener, g_midAppSelected, jpkg);
+    env->CallVoidMethod(ref, mid, jpkg);
     env->DeleteLocalRef(jpkg);
     if (env->ExceptionCheck()) env->ExceptionClear();
 }

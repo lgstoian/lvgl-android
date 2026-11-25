@@ -197,7 +197,11 @@ public:
     void set_frame_callback(void (*fn)(float dt));
     void clear_frame_callback();
 
-    void reset();
+    /* Clear all animated values. The frame callback is cleared too unless the
+     * caller is starting the render thread with the showcase already built —
+     * in that case the callback belongs to the live showcase screen and must
+     * survive this reset (see BC-017). */
+    void reset(bool keep_frame_callback = false);
 
 private:
     Engine() = default;

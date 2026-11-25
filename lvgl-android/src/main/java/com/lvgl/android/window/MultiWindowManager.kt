@@ -33,6 +33,27 @@ class MultiWindowManager(private val activity: Activity) {
         private set
 
     /**
+     * Coarse layout hint derived from the current [Configuration].
+     *
+     * This is a dependency-free foldable/large-screen signal: a smallest width
+     * of 600 dp or a `SCREENLAYOUT_SIZE_LARGE` configuration means the app should
+     * use its two-pane layout. A hinge angle needs `androidx.window`, which is
+     * intentionally not added to this library's dependency set.
+     *
+     * @property smallestWidthDp the configuration's smallest width in dp.
+     * @property useTwoPaneLayout `true` when the available width warrants it.
+     */
+    data class LayoutHint(val smallestWidthDp: Int, val useTwoPaneLayout: Boolean)
+
+    /** Receives a new [LayoutHint] when the configuration crosses a threshold. */
+    fun interface OnLayoutHintChangedListener {
+        fun onLayoutHintChanged(hint: LayoutHint)
+    }
+
+    private val layoutListeners = mutableListOf<OnLayoutHintChangedListener>()
+    private var layoutHint: LayoutHint = hintFrom(activity.resources.configuration)
+
+    /**
      * Updates the multi-window flag from the activity callback.
      *
      * @param isInMultiWindowMode `true` when the activity entered multi-window.
@@ -89,9 +110,44 @@ class MultiWindowManager(private val activity: Activity) {
         }
     }
 
+    /** The current layout hint; refresh it with [onConfigurationChanged]. */
+    fun currentLayoutHint(): LayoutHint = layoutHint
+
+    /** Registers a listener for coarse foldable/large-screen layout changes. */
+    fun addLayoutHintListener(listener: OnLayoutHintChangedListener) {
+        if (!layoutListeners.contains(listener)) layoutListeners.add(listener)
+    }
+
+    /** Removes a previously registered layout-hint listener. */
+    fun removeLayoutHintListener(listener: OnLayoutHintChangedListener) {
+        layoutListeners.remove(listener)
+    }
+
+    /**
+     * Re-derives the layout hint from a configuration change and notifies
+     * listeners when the two-pane decision actually changes.
+     */
+    fun onConfigurationChanged(config: Configuration) {
+        val next = hintFrom(config)
+        if (next != layoutHint) {
+            layoutHint = next
+            layoutListeners.toList().forEach { it.onLayoutHintChanged(next) }
+        }
+    }
+
+    private fun hintFrom(config: Configuration): LayoutHint {
+        val sw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            config.smallestScreenWidthDp
+        } else {
+            config.screenWidthDp
+        }
+        val screenSize = config.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK
+        val twoPane = sw >= 600 || screenSize >= Configuration.SCREENLAYOUT_SIZE_LARGE
+        return LayoutHint(sw, twoPane)
+    }
+
     /** Holds the private log tag. */
     companion object {
         private const val TAG = "MultiWindowManager"
     }
 }
-

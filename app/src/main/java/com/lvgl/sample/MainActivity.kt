@@ -54,6 +54,11 @@ class MainActivity : LvglActivity() {
         if (smokeScreen != 0) {
             val target = LvglActivity.screenResolver?.invoke(smokeScreen)
             if (target != null) {
+                /* Claim the dashboard screen before delegating. Without this
+                 * the smoke branch owns NO_SCREEN, so onResume after a hardware
+                 * Back from the child leaves the child's screen on the shared
+                 * display. The harness still starts the real target activity. */
+                setLvglScreen(DASHBOARD_SCREEN)
                 startActivity(Intent(this, target))
                 return
             }
@@ -65,5 +70,6 @@ class MainActivity : LvglActivity() {
 
     companion object {
         const val EXTRA_SMOKE_SCREEN = "SMOKE_SCREEN"
+        private const val DASHBOARD_SCREEN = 0
     }
 }

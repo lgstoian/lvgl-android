@@ -6,7 +6,6 @@
 package com.lvgl.android.input
 
 import android.content.Context
-import android.util.Log
 import android.view.MotionEvent
 import com.lvgl.android.engine.LvglEngine
 
@@ -21,7 +20,7 @@ import com.lvgl.android.engine.LvglEngine
  *
  * Call [processMotionEvent] from the view's `onTouchEvent`, on the UI thread.
  */
-class LvglInputProcessor(private val context: Context) {
+class LvglInputProcessor(private val context: Context?) {
 
     private val recognizer = GestureRecognizer()
     private var latestX = 0f
@@ -39,20 +38,47 @@ class LvglInputProcessor(private val context: Context) {
      * @return the detected [Gestures], or `null` when no gesture was recognised.
      */
     fun processMotionEvent(event: MotionEvent): Gestures? {
-        recognizer.handle(event)
+        val count = event.pointerCount
+        val index = event.actionIndex
+        val useIndex = event.actionMasked != MotionEvent.ACTION_MOVE && count > 0
+        val x = if (useIndex) event.getX(index) else event.x
+        val y = if (useIndex) event.getY(index) else event.y
+        return process(
+            GestureFrame(
+                action = event.actionMasked,
+                x = x,
+                y = y,
+                pointerCount = count,
+                eventTime = event.eventTime,
+                pointer0X = if (count > 0) event.getX(0) else x,
+                pointer0Y = if (count > 0) event.getY(0) else y,
+                pointer1X = if (count > 1) event.getX(1) else 0f,
+                pointer1Y = if (count > 1) event.getY(1) else 0f,
+                downTime = event.downTime
+            )
+        )
+    }
 
-        val action = event.actionMasked
-        when (action) {
+    /**
+     * Pure-Kotlin equivalent of [processMotionEvent], used by unit tests and by
+     * any non-Android host that can supply [GestureFrame]s directly.
+     */
+    fun process(frame: GestureFrame): Gestures? {
+        /* Tap and long-press are returned directly by handle(); swipe, pinch and
+         * rotate are queued for consumeLastGesture(). Keep BOTH paths: dropping
+         * the direct result silently swallowed every tap and long-press. */
+        val direct = recognizer.handle(frame)
+
+        when (frame.action) {
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_POINTER_DOWN -> {
-                val idx = event.actionIndex
-                latestX = event.getX(idx)
-                latestY = event.getY(idx)
+                latestX = frame.x
+                latestY = frame.y
                 LvglEngine.instance.onTouchEvent(0, latestX, latestY)
             }
             MotionEvent.ACTION_MOVE -> {
-                latestX = event.x
-                latestY = event.y
+                latestX = frame.x
+                latestY = frame.y
                 LvglEngine.instance.onTouchEvent(2, latestX, latestY)
             }
             MotionEvent.ACTION_UP,
@@ -62,7 +88,7 @@ class LvglInputProcessor(private val context: Context) {
             }
         }
 
-        return recognizer.consumeLastGesture()
+        return direct ?: recognizer.consumeLastGesture()
     }
 
     /** Holds the private log tag. */

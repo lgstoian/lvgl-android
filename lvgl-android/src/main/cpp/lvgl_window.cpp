@@ -28,6 +28,22 @@ namespace lvgl_ui {
 static void win_close_on_click(lv_event_t* e);
 static void win_stop_propagate(lv_event_t* e);
 
+/* The scrim must cover the real parent/display, not a desktop-sized constant.
+ * Called on create and on every animation frame so it also follows a surface
+ * resize (activity transition / foldable / multiwindow). */
+static void fit_backdrop_to_parent(lv_obj_t* bg) {
+    if (!bg) return;
+    lv_obj_t* parent = lv_obj_get_parent(bg);
+    int w = parent ? lv_obj_get_width(parent) : 0;
+    int h = parent ? lv_obj_get_height(parent) : 0;
+    if (w <= 0) w = LV_HOR_RES;
+    if (h <= 0) h = LV_VER_RES;
+    if (lv_obj_get_width(bg) != w || lv_obj_get_height(bg) != h) {
+        lv_obj_set_size(bg, w, h);
+    }
+    lv_obj_set_pos(bg, 0, 0);
+}
+
 Window::Window() : x_(0.0f), y_(0.0f), w_(800.0f), h_(480.0f), opa_(255.0f) {
     Engine::instance().add_spring(&x_);
     Engine::instance().add_spring(&y_);
@@ -53,10 +69,10 @@ void Window::create(lv_obj_t* parent, const Config& config) {
      * Starts hidden + non-clickable so it never covers hotspots underneath. */
     bg_close_ = lv_obj_create(parent);
     /* FLOATING so the backdrop ignores the parent's flex layout (otherwise a
-     * 2000x2000 child consumes the column and pushes the tiles off-screen). */
+     * full-screen child consumes the column and pushes the tiles off-screen).
+     * Its size comes from the actual parent and is refreshed every frame. */
     lv_obj_add_flag(bg_close_, LV_OBJ_FLAG_FLOATING);
-    lv_obj_set_size(bg_close_, 2000, 2000);   /* oversized to cover screen */
-    lv_obj_center(bg_close_);
+    fit_backdrop_to_parent(bg_close_);
     lv_obj_set_style_bg_color(bg_close_, lv_color_hex(0x0B0E16), 0);
     /* Fully opaque scrim: a translucent backdrop let the launcher tiles show
      * through around the window, which read as overlap. */
@@ -193,6 +209,7 @@ void Window::apply_keyframe(const WindowKeyframe& kf, bool teleport) {
 }
 
 void Window::apply_anim_values() {
+    fit_backdrop_to_parent(bg_close_);
     if (!container_) return;
     int32_t ix = (int32_t)std::lround(x_.value());
     int32_t iy = (int32_t)std::lround(y_.value());

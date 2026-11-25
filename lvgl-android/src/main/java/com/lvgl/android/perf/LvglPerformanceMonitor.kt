@@ -17,6 +17,12 @@ import java.util.concurrent.atomic.AtomicLong
  * current FPS and frame-time statistics, and exposes the same values through
  * [getFps], [getFrameCount] and [getStats].
  *
+ * [onFrameRendered] is the public sink: a native render callback (when one is
+ * available) should call it from the LVGL thread. The expected native bridge
+ * shape is `LvglEngine.nativeSetFrameCallback(listener)` with a listener method
+ * named `onFrameRendered()`; no such JNI export exists yet, so Kotlin callers
+ * drive the sink explicitly (for example from an app's own frame loop).
+ *
  * The state is intentionally not synchronised: call every method from the same
  * thread (normally the LVGL render thread). It is a debugging aid, not a
  * production profiling tool.

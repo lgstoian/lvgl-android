@@ -204,15 +204,16 @@ void Engine::tick(float dt) {
 }
 
 /* @breadcrumb BC-018 */
-void Engine::reset() {
+void Engine::reset(bool keep_frame_callback) {
     springs_.clear();
     points_.clear();
     colors_.clear();
     last_dt_ = 0.016f;
-    /* Deliberately does NOT clear frame_callback_: the showcase sets it while
-     * the screen is built (before the render thread starts), and this reset()
-     * runs at thread start — clearing it here would leave the showcase without
-     * its per-frame driver. ui_reset_showcase() clears it on screen exit. */
+    /* A callback that outlives its screen is a use-after-free: the showcase
+     * sets it while building, so only the thread-start reset of a live
+     * showcase keeps it. Every other reset (engine destroy / shutdown) drops
+     * it — ui_reset_showcase() has already released the window objects by then. */
+    if (!keep_frame_callback) frame_callback_ = nullptr;
 }
 
 /* -------------------------------------------------------------------------- */

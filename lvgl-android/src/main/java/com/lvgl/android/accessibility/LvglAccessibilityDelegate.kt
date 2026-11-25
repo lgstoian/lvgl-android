@@ -6,30 +6,37 @@
 package com.lvgl.android.accessibility
 
 import android.content.Context
-import android.util.Log
 
 /**
- * Helper methods to interface LVGL's focus system with Android Accessibility.
+ * Bridges LVGL's focus system to Android accessibility.
  *
- * The methods accept an opaque view id and are currently the Kotlin scaffolding
- * for a native JNI bridge: they log the intent now and are the single place to
- * route through once the native exports exist.
- *
- * NOTE: Full integration requires native JNI exports; this is the Kotlin scaffolding.
+ * Announcements go through the real [LvglScreenReader] path. Focusability and
+ * content descriptions are kept in a process-wide registry keyed by the opaque
+ * view id; the native UI kit does not currently expose a JNI call to set these
+ * properties on an LVGL object, so no bridge is invented here. The registry is
+ * still useful to callers: it keeps the state in one place and gives
+ * [LvglAccessibilityDelegate] a description to announce on focus changes.
  */
 object LvglAccessibilityHelper {
     /** Log tag used by this helper. */
     const val TAG = "LvglAccessibilityHelper"
 
+    private val focusableIds = mutableMapOf<String, Boolean>()
+    private val descriptions = mutableMapOf<String, String>()
+
     /**
      * Announces [text] to the accessibility service attached to [context].
      *
-     * @param context used to resolve the accessibility service.
+     * Delegates to [LvglScreenReader], which posts an
+     * [android.view.accessibility.AccessibilityEvent.TYPE_ANNOUNCEMENT] on the
+     * UI thread. Safe to call from the LVGL render thread.
+     *
+     * @param context used to resolve the foreground activity/window.
      * @param text the message to announce.
      */
     @JvmStatic
     fun announce(context: Context, text: String) {
-        Log.d(TAG, "Announcing: $text")
+        LvglScreenReader.announce(context, text)
     }
 
     /**
@@ -40,7 +47,7 @@ object LvglAccessibilityHelper {
      */
     @JvmStatic
     fun setFocusable(viewId: String, focusable: Boolean) {
-        Log.d(TAG, "Set focusable $viewId = $focusable")
+        focusableIds[viewId] = focusable
     }
 
     /**
@@ -51,8 +58,16 @@ object LvglAccessibilityHelper {
      */
     @JvmStatic
     fun setContentDescription(viewId: String, description: String) {
-        Log.d(TAG, "Set content description $viewId = $description")
+        descriptions[viewId] = description
     }
+
+    /** Whether [viewId] was registered as focusable. Unknown ids are not focusable. */
+    @JvmStatic
+    fun isFocusable(viewId: String): Boolean = focusableIds[viewId] == true
+
+    /** The content description registered for [viewId], or `null` when unset. */
+    @JvmStatic
+    fun contentDescription(viewId: String): String? = descriptions[viewId]
 }
 
 /**
@@ -65,18 +80,39 @@ class LvglAccessibilityDelegate(
     private val context: Context,
     private val viewId: String
 ) {
+    private var focused = false
+    private var focusLostAnnouncement: String? = null
+
     /**
      * Reports that this element gained focus and should announce [description].
      *
-     * The description is stored as the element's content description.
+     * The description is stored as the element's content description and then
+     * announced through the screen reader.
      */
     fun dispatchFocusGained(description: String) {
+        focused = true
+        LvglAccessibilityHelper.setFocusable(viewId, true)
         LvglAccessibilityHelper.setContentDescription(viewId, description)
+        LvglAccessibilityHelper.announce(context, description)
     }
 
-    /** Reports that this element lost focus. */
+    /**
+     * Reports that this element lost focus.
+     *
+     * Call [dispatchFocusLost] with an announcement to have the loss spoken;
+     * otherwise focus state is simply cleared.
+     */
     fun dispatchFocusLost() {
-        // Handle focus lost
+        focused = false
+        focusLostAnnouncement?.let { LvglAccessibilityHelper.announce(context, it) }
     }
-}
 
+    /** Clears focus and announces [announcement] to the screen reader. */
+    fun dispatchFocusLost(announcement: String) {
+        focusLostAnnouncement = announcement
+        dispatchFocusLost()
+    }
+
+    /** Whether this element is currently focused. */
+    fun isFocused(): Boolean = focused
+}

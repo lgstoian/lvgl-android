@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,10 @@ struct AppScreen {
     std::string json;
 };
 
+/* Screens are registered from the UI thread (JNI) but built and read on the
+ * LVGL thread. Guard the registry so a concurrent register/unregister cannot
+ * rehash the map while launch_screen() is walking it. */
+static std::mutex g_registryMutex;
 static std::map<int, AppScreen> g_appScreens;
 static int g_currentAppScreen = -1;
 
@@ -58,11 +63,22 @@ void ui_register_app_screen(int screen_id, const char* title, bool show_back,
     s.title     = title ? title : "";
     s.show_back = show_back;
     s.json      = json ? json : "";
+    std::lock_guard<std::mutex> lock(g_registryMutex);
     g_appScreens[screen_id] = std::move(s);
 }
 
 void ui_unregister_app_screen(int screen_id) {
+    std::lock_guard<std::mutex> lock(g_registryMutex);
     g_appScreens.erase(screen_id);
+}
+
+void ui_reset_app_screen() {
+    /* The screen object (and every node on it) is freed by the next build.
+     * Clear both maps and the owning screen id so ui_update_node() cannot
+     * touch a stale lv_obj_t* after switching to a built-in screen. */
+    g_nodeIds.clear();
+    g_idToNode.clear();
+    g_currentAppScreen = -1;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -211,7 +227,13 @@ struct JsonParser {
 /* -------------------------------------------------------------------------- */
 
 static void ui_node_event(lv_event_t* e) {
+    /* current_target is the object whose handler is running; fall back to the
+     * original target for widgets that re-send a value event from a child
+     * (LVGL's dropdown popup is one such case). */
     lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    if (!target || g_nodeIds.find(target) == g_nodeIds.end()) {
+        target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    }
     if (!target) return;
 
     auto it = g_nodeIds.find(target);
@@ -337,13 +359,9 @@ static lv_obj_t* build_node(const JsonValue& node, lv_obj_t* parent) {
         }
         lv_dropdown_set_selected(obj, node.get("selected").asInt(0));
         lv_obj_set_width(obj, LV_PCT(100));
-        lv_obj_set_style_text_font(obj, ui_font(14, ui_dpi()), 0);
-        lv_obj_set_style_text_color(obj, ui_palette().text, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(obj, ui_palette().card, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_border_width(obj, ui_dpx(1, ui_dpi()), LV_PART_MAIN);
-        lv_obj_set_style_border_color(obj, ui_palette().divider, LV_PART_MAIN);
-        lv_obj_set_style_radius(obj, ui_dpx(8, ui_dpi()), LV_PART_MAIN);
+        /* One source of truth for dropdown styling, including the popup list
+         * and its selected row (BC-030). */
+        ui_style_dropdown(obj, 14);
         lv_obj_add_event_cb(obj, ui_node_event, LV_EVENT_VALUE_CHANGED, nullptr);
     } else if (type == "divider") {
         obj = ui_make_divider(parent);
@@ -419,18 +437,23 @@ void ui_update_node(int screen_id, const char* node_id, const char* json) {
 /* -------------------------------------------------------------------------- */
 
 bool ui_build_app_screen(int screen_id, int dpi) {
-    auto it = g_appScreens.find(screen_id);
-    if (it == g_appScreens.end()) return false;
+    AppScreen spec;
+    {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        auto it = g_appScreens.find(screen_id);
+        if (it == g_appScreens.end()) return false;
+        spec = it->second;
+    }
 
     g_currentAppScreen = screen_id;
     g_nodeIds.clear();
     g_idToNode.clear();
 
     lv_obj_t* screen = ui_begin_screen(dpi);
-    UiScaffold scaffold = ui_make_scaffold(screen, it->second.title.c_str(),
-                                           it->second.show_back);
+    UiScaffold scaffold = ui_make_scaffold(screen, spec.title.c_str(),
+                                           spec.show_back);
 
-    JsonParser parser(it->second.json);
+    JsonParser parser(spec.json);
     const JsonValue root = parser.parse();
     if (root.type == JsonValue::Array) {
         build_children(root, scaffold.body);

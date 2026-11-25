@@ -9,13 +9,16 @@ import android.os.Handler
 import android.os.Looper
 import com.lvgl.android.game.LvglGameActivity
 import com.lvgl.android.navigation.LvglNavigation
+import com.lvgl.android.perf.LvglPerformanceMonitor
 
 /**
  * Demonstrates [LvglGameActivity] and the native game screen.
  *
  * The screen itself (target, score, hit testing) is rendered and updated by the
  * native UI kit in `demo_ui.cpp`; this activity supplies the vsync-aware frame
- * loop that a real game would use for its own simulation.
+ * loop that a real game would use for its own simulation. The loop interval is
+ * derived from [targetFps], and each tick is reported to the public
+ * [LvglPerformanceMonitor.onFrameRendered] sink.
  */
 class GameSampleActivity : LvglGameActivity() {
 
@@ -23,10 +26,13 @@ class GameSampleActivity : LvglGameActivity() {
 
     private val tick = object : Runnable {
         override fun run() {
-            onGameLoop(16L)
-            handler.postDelayed(this, 16L)
+            onGameLoop(frameIntervalMs())
+            LvglPerformanceMonitor.onFrameRendered()
+            handler.postDelayed(this, frameIntervalMs())
         }
     }
+
+    private fun frameIntervalMs(): Long = (1000L / targetFps).coerceAtLeast(1L)
 
     override fun onCreateLvgl() {
         LvglNavigation.pushScreen("GameSample")
@@ -37,12 +43,14 @@ class GameSampleActivity : LvglGameActivity() {
 
     override fun onResume() {
         super.onResume()
+        LvglPerformanceMonitor.start()
         handler.post(tick)
     }
 
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(tick)
+        LvglPerformanceMonitor.stop()
     }
 
     override fun onGameLoop(deltaMs: Long) {

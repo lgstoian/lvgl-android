@@ -4,9 +4,14 @@
     <!-- Camera sample status (rendered inside LVGL) -->
     <string name="camera_status_idle">Camera status: idle</string>
     <string name="camera_status_requesting">Camera status: requesting permission.</string>
-    <string name="camera_status_opened">Camera status: opened camera 0</string>
+    <string name="camera_status_opening">Camera status: opening camera %1$d of %2$d</string>
+    <string name="camera_status_opened">Camera status: camera %1$d of %2$d - tap preview to switch</string>
     <string name="camera_status_error">Camera status: error - %1$s</string>
     <string name="camera_status_denied">Camera status: permission denied</string>
+    <string name="camera_status_none">Camera status: no cameras found</string>
+    <string name="camera_status_single">Camera status: only 1 camera available</string>
+    <string name="camera_status_unavailable">Camera status: camera %1$s unavailable</string>
+    <string name="camera_hint">Tap the preview to switch cameras</string>
 
     <!-- Launcher sample: the app grid is rendered by the native UI kit -->
 
@@ -28,6 +33,18 @@
     <string name="app_demo_option_b">Option B</string>
     <string name="app_demo_option_c">Option C</string>
     <string name="app_demo_licenses">Open source licenses</string>
+
+    <!-- Sample IME: the keyboard screen is declared with LvglUi -->
+    <string name="ime_label">LVGL Sample Keyboard</string>
+    <string name="ime_title">LVGL Keyboard</string>
+    <string name="ime_hint">Tap a key to type into the focused field.</string>
+    <string name="ime_letters">abc</string>
+    <string name="ime_letters_value">abc</string>
+    <string name="ime_digits">123</string>
+    <string name="ime_digits_value">123</string>
+    <string name="ime_space">Space</string>
+    <string name="ime_enter">Enter</string>
+    <string name="ime_backspace">Backspace</string>
 
     <!-- Open source notices (Play policy: the app must disclose the licenses of
          the open-source software it uses). -->

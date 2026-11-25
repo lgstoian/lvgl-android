@@ -148,6 +148,14 @@ struct UiDeviceInfo {
     const char* android_version;
     const char* cameras;
     const char* sensors;
+    /* Hardware detection: these six are queried from Android after boot and
+     * pushed through nativeRefreshDeviceInfo(). Empty means "unknown". */
+    const char* modem;
+    const char* network;
+    const char* battery_tech;
+    const char* audio;
+    const char* usb;
+    const char* bluetooth;
 };
 void ui_set_device_info(const UiDeviceInfo& info);
 const UiDeviceInfo& ui_device_info();
@@ -277,6 +285,11 @@ lv_obj_t* ui_make_checkbox(lv_obj_t* parent, const char* text);
 lv_obj_t* ui_make_progress(lv_obj_t* parent, int value);
 lv_obj_t* ui_make_arc(lv_obj_t* parent, int value);
 
+/* Apply the active Material palette to a dropdown AND its popup list. Both the
+ * built-in widget screen and app-defined (Kotlin DSL) screens call this, so a
+ * dropdown never falls back to LVGL's light default in a dark theme. */
+void ui_style_dropdown(lv_obj_t* dd, int font_dp);
+
 /* ---- App-defined screens (Kotlin UI builder) -----------------------------
  * An app declares a screen tree in Kotlin (com.lvgl.android.ui.LvglUi), which
  * is serialised to JSON and pushed through ui_register_app_screen. Building is
@@ -291,6 +304,9 @@ lv_obj_t* ui_begin_screen(int dpi);
 void ui_register_app_screen(int screen_id, const char* title, bool show_back,
                             const char* json);
 void ui_unregister_app_screen(int screen_id);
+/* Drop node ids belonging to a previous app screen. Called by launch_screen
+ * for every built-in screen so a stale node pointer can never be updated. */
+void ui_reset_app_screen();
 bool ui_build_app_screen(int screen_id, int dpi);
 void ui_update_node(int screen_id, const char* node_id, const char* json);
 

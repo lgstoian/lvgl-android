@@ -5,7 +5,10 @@
 // See LICENSE in the project root for full license information.
 package com.lvgl.android.launcher
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import com.lvgl.android.activity.LvglActivity
 
@@ -26,6 +29,10 @@ fun interface LauncherAppListener {
  * applications, launching by package, and the intent that resolves the current
  * default home. Subclasses implement the package-change callbacks to refresh
  * their app grid.
+ *
+ * Dynamic `PACKAGE_ADDED/REMOVED/CHANGED` receivers are registered in [onStart]
+ * and unregistered in [onStop]; all four callbacks are dispatched on the UI
+ * thread even though the broadcast itself arrives there too.
  *
  * Declare the activity as a home candidate in the manifest with
  * `android.intent.category.HOME` and `DEFAULT` categories.
@@ -59,6 +66,40 @@ abstract class LvglLauncherActivity : LvglActivity() {
      * @param packageName the changed package.
      */
     abstract fun onPackageChanged(packageName: String)
+
+    private val packageFilter = IntentFilter().apply {
+        addAction(Intent.ACTION_PACKAGE_ADDED)
+        addAction(Intent.ACTION_PACKAGE_REMOVED)
+        addAction(Intent.ACTION_PACKAGE_CHANGED)
+        addDataScheme("package")
+    }
+
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val packageName = intent.data?.schemeSpecificPart ?: return
+            val action = intent.action ?: return
+            /* The callbacks touch the shared LVGL display; make the thread
+             * contract explicit rather than relying on the broadcast thread. */
+            runOnUiThread {
+                when (action) {
+                    Intent.ACTION_PACKAGE_ADDED -> {
+                        onPackageAdded(packageName)
+                        onAllAppsChanged()
+                    }
+                    Intent.ACTION_PACKAGE_REMOVED -> {
+                        onPackageRemoved(packageName)
+                        onAllAppsChanged()
+                    }
+                    Intent.ACTION_PACKAGE_CHANGED -> {
+                        onPackageChanged(packageName)
+                        onAllAppsChanged()
+                    }
+                }
+            }
+        }
+    }
+
+    private var receiverRegistered = false
 
     /**
      * An intent that opens the user's current home screen.
@@ -104,6 +145,14 @@ abstract class LvglLauncherActivity : LvglActivity() {
         super.onCreate(savedInstanceState)
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (!receiverRegistered) {
+            registerReceiver(packageReceiver, packageFilter)
+            receiverRegistered = true
+        }
+    }
+
     override fun onResume() {
         super.onResume()
     }
@@ -111,5 +160,16 @@ abstract class LvglLauncherActivity : LvglActivity() {
     override fun onPause() {
         super.onPause()
     }
-}
 
+    override fun onStop() {
+        if (receiverRegistered) {
+            try {
+                unregisterReceiver(packageReceiver)
+            } catch (t: IllegalArgumentException) {
+                /* Already unregistered by the system; nothing to do. */
+            }
+            receiverRegistered = false
+        }
+        super.onStop()
+    }
+}

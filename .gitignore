@@ -26,6 +26,9 @@ screenshots/_*.png
 screenshots/dynamic/
 screenshots/audit/
 screenshots/final/*.txt
+screenshots/hardware/*
+!screenshots/hardware/FINDINGS.md
+!screenshots/hardware/final2/
 !screenshots/.gitkeep
 
 # Temporary

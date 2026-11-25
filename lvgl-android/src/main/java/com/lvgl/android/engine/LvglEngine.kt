@@ -36,6 +36,9 @@ class LvglEngine private constructor() {
     private var nativeHandle: Long = 0
     private var activeOwner: Any? = null
 
+    /** Last pushed device-info payload, kept so a screen can be refreshed. */
+    private var cachedDeviceInfo: Array<String>? = null
+
     /** True once the native engine object has been allocated. */
     val initialized: Boolean get() = nativeHandle != 0L
 
@@ -154,8 +157,14 @@ class LvglEngine private constructor() {
 
     /**
      * Pushes the real device facts (SoC, RAM, storage, display, cameras,
-     * sensors) so the dashboard device map reflects this device. Collected by
-     * [LvglDeviceInfo]; safe to call before the display exists.
+     * sensors, modem, network, battery, audio, USB and Bluetooth) so the
+     * dashboard device map reflects this device. Collected by
+     * `com.lvgl.android.system.LvglDeviceInfo`; safe to call before the display
+     * exists because the payload is cached natively and read on screen build.
+     *
+     * The 15 strings are passed to native code in this fixed order:
+     * manufacturer, model, soc, memory, storage, display, androidVersion,
+     * cameras, sensors, modem, network, batteryTech, audio, usb, bluetooth.
      */
     fun setDeviceInfo(
         manufacturer: String,
@@ -167,13 +176,40 @@ class LvglEngine private constructor() {
         androidVersion: String,
         cameras: String,
         sensors: String,
+        modem: String,
+        network: String,
+        batteryTech: String,
+        audio: String,
+        usb: String,
+        bluetooth: String,
     ) {
-        if (nativeHandle != 0L) {
-            nativeSetDeviceInfo(
-                nativeHandle, manufacturer, model, soc, memory, storage,
-                display, androidVersion, cameras, sensors
-            )
-        }
+        cachedDeviceInfo = arrayOf(
+            manufacturer, model, soc, memory, storage, display, androidVersion,
+            cameras, sensors, modem, network, batteryTech, audio, usb, bluetooth
+        )
+        if (nativeHandle != 0L) nativePushDeviceInfo(cachedDeviceInfo!!)
+    }
+
+    /**
+     * Re-sends the last [cachedDeviceInfo] snapshot and forces the dashboard to
+     * redraw so a newly granted camera permission, a camera becoming available
+     * or a configuration change is visible without recreating the activity.
+     * No-op before [setDeviceInfo] has been called. Safe from any thread.
+     */
+    fun refreshDeviceInfo() {
+        val info = cachedDeviceInfo ?: return
+        if (nativeHandle == 0L) return
+        nativePushDeviceInfo(info)
+        nativeRefreshDeviceInfo(nativeHandle)
+    }
+
+    /** JNI takes the array only as a convenience; the contract is 15 Strings. */
+    private fun nativePushDeviceInfo(info: Array<String>) {
+        nativeSetDeviceInfo(
+            nativeHandle, info[0], info[1], info[2], info[3], info[4], info[5],
+            info[6], info[7], info[8], info[9], info[10], info[11], info[12],
+            info[13], info[14]
+        )
     }
 
     /** Introspection helpers used by tests. */
@@ -298,8 +334,16 @@ class LvglEngine private constructor() {
         display: String,
         androidVersion: String,
         cameras: String,
-        sensors: String
+        sensors: String,
+        modem: String,
+        network: String,
+        batteryTech: String,
+        audio: String,
+        usb: String,
+        bluetooth: String
     )
+
+    private external fun nativeRefreshDeviceInfo(handle: Long)
 
     private external fun nativeCreate(): Long
     private external fun nativeDestroy(handle: Long)

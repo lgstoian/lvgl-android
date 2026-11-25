@@ -53,12 +53,22 @@ class MaterialTheme private constructor() {
     var onSurfaceColor: Int = 0xFF1C1B1F.toInt()
         private set
 
-    /** Background opacity percentage (0..100). */
+    /**
+     * Background opacity percentage (0..100).
+     *
+     * Fixed at 100: the native UI kit has no window-transparency export, so an
+     * app cannot make the LVGL background translucent through this value. The
+     * property is kept as the single source of truth for a future native hook;
+     * reading it always returns 100 today.
+     */
     var backgroundOpacity: Int = 100
         private set
 
     private var palette: IntArray = MaterialPalette.light()
         private set
+
+    /** Last context used to resolve colours; lets [followSystemDarkMode] re-resolve. */
+    private var lastContext: Context? = null
 
     private val listeners = CopyOnWriteArrayList<OnThemeChangedListener>()
 
@@ -73,6 +83,7 @@ class MaterialTheme private constructor() {
      * @param context used to read the configuration and dynamic colours.
      */
     fun initialize(context: Context) {
+        lastContext = context.applicationContext
         val config = context.resources.configuration
         isDarkMode = darkModeOverride ?: isSystemDark(config)
         updateColors(context)
@@ -89,6 +100,7 @@ class MaterialTheme private constructor() {
      * @param config the new [android.content.res.Configuration].
      */
     fun onConfigurationChanged(context: Context, config: Configuration) {
+        lastContext = context.applicationContext
         val newDarkMode = darkModeOverride ?: isSystemDark(config)
         if (newDarkMode != isDarkMode) {
             isDarkMode = newDarkMode
@@ -105,6 +117,7 @@ class MaterialTheme private constructor() {
      * @param context used to read dynamic colours.
      */
     fun toggleDarkMode(context: Context) {
+        lastContext = context.applicationContext
         darkModeOverride = !isDarkMode
         isDarkMode = darkModeOverride ?: !isDarkMode
         updateColors(context)
@@ -112,9 +125,32 @@ class MaterialTheme private constructor() {
         Log.d(TAG, "Dark mode toggled: darkMode=$isDarkMode")
     }
 
-    /** Clear the app-local override and follow the system again. */
+    /**
+     * Clear the app-local override and re-resolve the theme from the system.
+     *
+     * The palette is recomputed (so Material You accents are refreshed too) and
+     * listeners are notified even when the dark/light result did not change,
+     * because the override itself may have been the only difference. When no
+     * context has been seen yet the override is still cleared, but no colours
+     * can be re-resolved and no notification is sent.
+     */
     fun followSystemDarkMode() {
         darkModeOverride = null
+        val context = lastContext ?: return
+        isDarkMode = isSystemDark(context.resources.configuration)
+        updateColors(context)
+        notifyListeners()
+        Log.d(TAG, "Following system dark mode: darkMode=$isDarkMode")
+    }
+
+    /**
+     * Clears the override and re-resolves using [context].
+     *
+     * Use this overload when no activity has called [initialize] yet.
+     */
+    fun followSystemDarkMode(context: Context) {
+        lastContext = context.applicationContext
+        followSystemDarkMode()
     }
 
     private fun isSystemDark(config: Configuration): Boolean =
@@ -130,6 +166,7 @@ class MaterialTheme private constructor() {
      * @param enabled `true` to follow the Material You palette.
      */
     fun setDynamicColors(context: Context, enabled: Boolean) {
+        lastContext = context.applicationContext
         if (useDynamicColors == enabled) return
         useDynamicColors = enabled
         updateColors(context)

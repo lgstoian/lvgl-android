@@ -28,6 +28,16 @@ class LvglFocusNavigation(
     private val focusableIds = mutableListOf<Int>()
 
     /**
+     * Called when the focused element is activated (D-pad centre or Enter).
+     *
+     * The callback receives the focused id and runs on the thread that handled
+     * the key event (normally the UI thread). Set it to perform the real
+     * activation for the app's widget model; without a callback the key is still
+     * consumed but has no side effect.
+     */
+    var onActivate: ((focusedId: Int) -> Unit)? = null
+
+    /**
      * Direction of a focus move.
      *
      * @property dx horizontal offset of the move.
@@ -121,7 +131,16 @@ class LvglFocusNavigation(
     }
 
     private fun onEnter() {
-        Log.d(TAG, "Focus enter on $focusedId")
+        if (focusedId == -1) {
+            Log.d(TAG, "Focus enter ignored: nothing focused")
+            return
+        }
+        val callback = onActivate
+        if (callback != null) {
+            callback(focusedId)
+        } else {
+            Log.d(TAG, "Focus enter on $focusedId (no activation callback registered)")
+        }
     }
 
     /** Holds the private log tag. */

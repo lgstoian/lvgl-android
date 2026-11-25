@@ -63,5 +63,21 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
         <activity android:name=".LicensesActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
+
+        <!-- Sample LVGL keyboard. BIND_INPUT_METHOD is a platform signature
+             permission enforced on this service by Android; it is not an app
+             permission request, so CAMERA remains the only <uses-permission>. -->
+        <service
+            android:name=".ImeSampleService"
+            android:exported="true"
+            android:label="@string/ime_label"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/input_method" />
+        </service>
     </application>
 </manifest>

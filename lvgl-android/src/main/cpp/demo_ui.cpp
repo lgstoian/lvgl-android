@@ -28,11 +28,13 @@
 #include "demo_ui.h"
 
 #include <android/log.h>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <ctime>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -94,8 +96,9 @@ static lv_timer_t* g_clock_timer    = nullptr;
 static int  g_battery_level         = -1;
 static bool g_battery_charging      = false;
 
-/* Snackbar overlay + its auto-dismiss timer. Cleared in make_screen() before
- * the screen is cleaned, so a pending timer can never touch a freed object. */
+/* Snackbar overlay + its auto-dismiss timer. Cleared in launch_screen() for
+ * every screen build (including the showcase, which bypasses make_screen), so
+ * a pending timer can never touch a freed object. */
 static lv_obj_t*  g_snackbar        = nullptr;
 static lv_timer_t* g_snackbar_timer = nullptr;
 
@@ -199,6 +202,25 @@ static UiTheme g_theme = UiTheme();
 
 const UiPalette& ui_palette() {
     return g_pal;
+}
+
+/* Pick a legible foreground for a filled component. Material You on some
+ * devices maps `primary`/`onPrimary` to a low-contrast pair (e.g. orange with
+ * purple text). Prefer the palette role when it is readable; otherwise fall
+ * back to the higher-contrast of black/white. This keeps every filled widget
+ * readable without hard-coding theme colours. @breadcrumb BC-030 */
+static lv_color_t contrasting_text(lv_color_t bg, lv_color_t preferred) {
+    const float bg_lum = lv_color_luminance(bg) / 255.0f;
+    auto ratio = [bg_lum](float other_lum) {
+        const float hi = bg_lum > other_lum ? bg_lum : other_lum;
+        const float lo = bg_lum > other_lum ? other_lum : bg_lum;
+        return (hi + 0.05f) / (lo + 0.05f);
+    };
+    const float pref_ratio = ratio(lv_color_luminance(preferred) / 255.0f);
+    if (pref_ratio >= 4.5f) return preferred;
+    const float white_ratio = ratio(1.0f);
+    const float black_ratio = ratio(0.0f);
+    return white_ratio >= black_ratio ? lv_color_white() : lv_color_black();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -370,6 +392,7 @@ lv_obj_t* ui_make_section(lv_obj_t* parent, const char* caption) {
     lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_row(card, ui_space(UI_SPACE_MD), LV_PART_MAIN);
+    ui_decorative(card);
     if (caption) {
         ui_make_label(card, caption, g_tx.f_caption, g_pal.dim);
     }
@@ -502,10 +525,13 @@ lv_obj_t* ui_make_button(lv_obj_t* parent, const char* text, UiButtonStyle style
             fg = danger ? g_pal.danger : g_pal.primary;
             break;
         case UI_BUTTON_FILLED:
-        default:
-            lv_obj_set_style_bg_color(b, danger ? g_pal.danger : g_pal.primary, LV_PART_MAIN);
-            fg = danger ? mrole(MATERIAL_ON_ERROR) : g_pal.on_primary;
+        default: {
+            const lv_color_t bg = danger ? g_pal.danger : g_pal.primary;
+            lv_obj_set_style_bg_color(b, bg, LV_PART_MAIN);
+            fg = contrasting_text(bg, danger ? mrole(MATERIAL_ON_ERROR)
+                                             : g_pal.on_primary);
             break;
+        }
     }
     /* Pressed state: a soft overlay instead of the default theme flash. */
     lv_obj_set_style_bg_opa(b, LV_OPA_80, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -555,6 +581,7 @@ lv_obj_t* ui_make_chip(lv_obj_t* parent, const char* label, bool selected) {
     lv_obj_set_flex_align(c, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(c, ui_dpx(6, g_dpi), LV_PART_MAIN);
+    ui_decorative(c);
     if (selected) {
         ui_make_label(c, LV_SYMBOL_OK, 12, mrole(MATERIAL_ON_SECONDARY_CONTAINER));
     }
@@ -624,6 +651,7 @@ lv_obj_t* ui_make_m3_card(lv_obj_t* parent, UiCardStyle style) {
     lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_START);
     lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    ui_decorative(c);
     return c;
 }
 
@@ -647,6 +675,7 @@ lv_obj_t* ui_make_text_field(lv_obj_t* parent, const char* label, const char* va
     lv_obj_set_flex_flow(box, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
+    ui_decorative(box);
     ui_make_label(box, (value && *value) ? value : "—", 15, g_pal.text);
     return col;
 }
@@ -722,6 +751,7 @@ lv_obj_t* ui_make_bottom_nav(lv_obj_t* parent, const UiNavItem* items, int count
     lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+    ui_decorative(bar);
     g_nav_select = on_select;
     g_nav_user_data = user_data;
 
@@ -902,6 +932,7 @@ lv_obj_t* ui_make_snackbar(lv_obj_t* parent, const char* message, const char* ac
     lv_obj_set_style_pad_right(s, ui_dpx(4, g_dpi), LV_PART_MAIN);
     lv_obj_set_style_pad_column(s, ui_dpx(8, g_dpi), LV_PART_MAIN);
     lv_obj_clear_flag(s, LV_OBJ_FLAG_SCROLLABLE);
+    ui_decorative(s);
     lv_obj_add_event_cb(s, on_stop_propagate, LV_EVENT_ALL, nullptr);
 
     if (message && *message) {
@@ -966,13 +997,9 @@ static lv_obj_t* make_screen(const UiTheme& theme, int dpi) {
     g_tx  = make_tokens(g_dpi);
 
     lv_obj_t* screen = lv_screen_active();
-    /* A snackbar is a child of the screen: drop its auto-dismiss timer before
-     * cleaning, otherwise the timer would fire on a freed object. */
-    if (g_snackbar_timer) {
-        lv_timer_delete(g_snackbar_timer);
-        g_snackbar_timer = nullptr;
-    }
-    g_snackbar = nullptr;
+    /* launch_screen() owns the snackbar timer teardown: make_screen() is not
+     * used by the showcase or app screens, so deleting the timer here left it
+     * firing on an object freed by lv_obj_clean(). */
     lv_obj_clean(screen);
     lv_obj_set_width(screen, LV_PCT(100));
     lv_obj_set_height(screen, LV_PCT(100));
@@ -1253,6 +1280,7 @@ lv_obj_t* ui_make_dashboard_panel(lv_obj_t* parent, const char* caption) {
     lv_obj_set_style_shadow_opa(panel, LV_OPA_20, LV_PART_MAIN);
     lv_obj_set_style_shadow_offset_y(panel, ui_dpx(2, g_dpi), LV_PART_MAIN);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    ui_decorative(panel);
     if (caption) {
         ui_make_label(panel, caption, 12, g_pal.dim);
     }
@@ -1305,23 +1333,32 @@ static constexpr int kOutsideCount = sizeof(kOutside) / sizeof(kOutside[0]);
 /* Persistent storage for the pushed device info (JNI strings are temporary). */
 static std::string g_di_manufacturer, g_di_model, g_di_soc, g_di_memory,
                    g_di_storage, g_di_display, g_di_android, g_di_cameras,
-                   g_di_sensors;
-static UiDeviceInfo g_di = { "", "", "", "", "", "", "", "", "" };
+                   g_di_sensors, g_di_modem, g_di_network, g_di_battery_tech,
+                   g_di_audio, g_di_usb, g_di_bluetooth;
+static UiDeviceInfo g_di = {};
 
 void ui_set_device_info(const UiDeviceInfo& info) {
-    g_di_manufacturer = info.manufacturer ? info.manufacturer : "";
-    g_di_model        = info.model        ? info.model        : "";
-    g_di_soc          = info.soc          ? info.soc          : "";
-    g_di_memory       = info.memory       ? info.memory       : "";
-    g_di_storage      = info.storage      ? info.storage      : "";
-    g_di_display      = info.display      ? info.display      : "";
-    g_di_android      = info.android_version ? info.android_version : "";
-    g_di_cameras      = info.cameras      ? info.cameras      : "";
-    g_di_sensors      = info.sensors      ? info.sensors      : "";
+    g_di_manufacturer  = info.manufacturer  ? info.manufacturer  : "";
+    g_di_model         = info.model         ? info.model         : "";
+    g_di_soc           = info.soc           ? info.soc           : "";
+    g_di_memory        = info.memory        ? info.memory        : "";
+    g_di_storage       = info.storage       ? info.storage       : "";
+    g_di_display       = info.display       ? info.display       : "";
+    g_di_android       = info.android_version ? info.android_version : "";
+    g_di_cameras       = info.cameras       ? info.cameras       : "";
+    g_di_sensors       = info.sensors       ? info.sensors       : "";
+    g_di_modem         = info.modem         ? info.modem         : "";
+    g_di_network       = info.network       ? info.network       : "";
+    g_di_battery_tech  = info.battery_tech  ? info.battery_tech  : "";
+    g_di_audio         = info.audio         ? info.audio         : "";
+    g_di_usb           = info.usb           ? info.usb           : "";
+    g_di_bluetooth     = info.bluetooth     ? info.bluetooth     : "";
     g_di = {
         g_di_manufacturer.c_str(), g_di_model.c_str(), g_di_soc.c_str(),
         g_di_memory.c_str(), g_di_storage.c_str(), g_di_display.c_str(),
-        g_di_android.c_str(), g_di_cameras.c_str(), g_di_sensors.c_str()
+        g_di_android.c_str(), g_di_cameras.c_str(), g_di_sensors.c_str(),
+        g_di_modem.c_str(), g_di_network.c_str(), g_di_battery_tech.c_str(),
+        g_di_audio.c_str(), g_di_usb.c_str(), g_di_bluetooth.c_str()
     };
 }
 
@@ -1330,30 +1367,56 @@ const UiDeviceInfo& ui_device_info() {
 }
 
 static const char* device_value(DeviceField field) {
+    const char* value = "";
     switch (field) {
-        case FIELD_SOC:     return g_di.soc;
-        case FIELD_MEMORY:  return g_di.memory;
-        case FIELD_STORAGE: return g_di.storage;
-        case FIELD_DISPLAY: return g_di.display;
-        case FIELD_CAMERA:  return g_di.cameras;
-        case FIELD_SENSORS: return g_di.sensors;
-        /* Not exposed by the Android APIs; show a plausible default. */
-        case FIELD_MODEM:   return "5G";
-        case FIELD_WIFI:    return "WiFi";
-        case FIELD_BATTERY: return "Li-Po";
-        case FIELD_AUDIO:   return "I2S";
-        case FIELD_USB:     return "USB 3.2";
+        case FIELD_SOC:     value = g_di.soc;     break;
+        case FIELD_MEMORY:  value = g_di.memory;  break;
+        case FIELD_STORAGE: value = g_di.storage; break;
+        case FIELD_DISPLAY: value = g_di.display; break;
+        case FIELD_CAMERA:  value = g_di.cameras; break;
+        case FIELD_SENSORS: value = g_di.sensors; break;
+        /* All six are now collected from Android; no invented defaults. */
+        case FIELD_MODEM:   value = g_di.modem;        break;
+        case FIELD_WIFI:    value = g_di.network;      break;
+        case FIELD_BATTERY: value = g_di.battery_tech; break;
+        case FIELD_AUDIO:   value = g_di.audio;        break;
+        case FIELD_USB:     value = g_di.usb;          break;
     }
-    return "";
+    return (value && *value) ? value : "?";
 }
 
-/* Height of a label's text, used to centre the two lines without flex. */
-static int label_text_height(lv_obj_t* label) {
-    lv_point_t size = {0, 0};
-    lv_text_get_size(&size, lv_label_get_text(label),
-                     lv_obj_get_style_text_font(label, LV_PART_MAIN),
-                     0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    return size.y;
+/* Fit one device-map chip line inside its box. ui_fit_label() only constrains
+ * width: a DOTS-mode label with LV_SIZE_CONTENT height wraps into a second line
+ * and spills below the chip (e.g. "WiFi/BT: ?/on" or "?+Speaker+Phone"). Force a
+ * fixed single-line height from the font ladder so long values truncate with
+ * dots instead of overflowing. @breadcrumb BC-027 */
+static void fit_chip_line(lv_obj_t* label, int max_w, int max_dp, int line_budget) {
+    const char* text = lv_label_get_text(label);
+    if (!text || !*text || max_w <= 0 || line_budget <= 0) return;
+    const int limit_px = ui_dpx(max_dp, g_dpi);
+    const int count = static_cast<int>(sizeof(kFontTable) / sizeof(kFontTable[0]));
+    const lv_font_t* chosen = nullptr;
+    int line_h = 0;
+
+    /* Largest height-safe font whose text fits; when none fits, keep the
+     * smallest height-safe font and let DOTS truncate the overflow. */
+    for (int i = count - 1; i >= 0; i--) {
+        if (kFontTable[i].px > limit_px) continue;
+        const int h = lv_font_get_line_height(kFontTable[i].font);
+        if (h > line_budget) continue;
+        chosen = kFontTable[i].font;
+        line_h = h;
+        if (text_width(text, chosen) <= max_w) break;
+    }
+    if (!chosen) {
+        chosen = kFontTable[0].font;
+        line_h = lv_font_get_line_height(chosen);
+    }
+    lv_obj_set_style_text_font(label, chosen, LV_PART_MAIN);
+    lv_obj_set_width(label, max_w);
+    lv_obj_set_height(label, line_h > 0 ? line_h : 1);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
 static void draw_map_chip(lv_obj_t* d, const ChipDef& c, int width_px, int height_px) {
@@ -1374,25 +1437,27 @@ static void draw_map_chip(lv_obj_t* d, const ChipDef& c, int width_px, int heigh
     lv_obj_set_style_border_color(box, g_pal.chip_border, LV_PART_MAIN);
     ui_decorative(box);
 
+    /* Two single-line labels must share the chip height, inside its border. */
+    const int border = ui_dpx(1, g_dpi);
+    const int inner_w = bw - border * 2 > 0 ? bw - border * 2 : bw;
+    const int gap = ui_dpx(2, g_dpi);
+    const int line_budget = (bh - gap) / 2 > 0 ? (bh - gap) / 2 : 1;
     const char* value = device_value(c.value);
 
     lv_obj_t* nm = ui_make_label(box, c.name, ui_tokens().f_body, g_pal.chip_text);
-    ui_fit_label(nm, bw, ui_tokens().f_body);
-    lv_obj_set_width(nm, bw);
-    lv_obj_set_style_text_align(nm, LV_TEXT_ALIGN_CENTER, 0);
+    fit_chip_line(nm, inner_w, ui_tokens().f_body, line_budget);
 
-    lv_obj_t* sb = ui_make_label(box, (value && *value) ? value : "-",
+    lv_obj_t* sb = ui_make_label(box, value,
                                  ui_tokens().f_caption, to_lv_color(c.bus));
-    ui_fit_label(sb, bw, ui_tokens().f_caption);
-    lv_obj_set_width(sb, bw);
-    lv_obj_set_style_text_align(sb, LV_TEXT_ALIGN_CENTER, 0);
+    fit_chip_line(sb, inner_w, ui_tokens().f_caption, line_budget);
 
-    const int gap = ui_dpx(2, g_dpi);
-    const int nh = label_text_height(nm);
-    const int sh = label_text_height(sb);
-    const int top = (bh - (nh + gap + sh)) / 2;
-    lv_obj_set_pos(nm, 0, top);
-    lv_obj_set_pos(sb, 0, top + nh + gap);
+    /* Align relative to the two objects instead of trusting self-size queries:
+     * a label whose explicit height is applied during the next refresh can
+     * otherwise leave get_height() at 0 here and both lines land on top of each
+     * other. Align-to anchors the value below the name regardless. */
+    const int pad = border + gap;
+    lv_obj_align(nm, LV_ALIGN_TOP_MID, 0, pad);
+    lv_obj_align_to(sb, nm, LV_ALIGN_OUT_BOTTOM_MID, 0, gap);
 }
 
 lv_obj_t* ui_make_diagram(lv_obj_t* parent, int width_px, int height_px) {
@@ -1604,7 +1669,49 @@ void build_home_screen(int /*dpi*/) {
         sw = W - pad * 2;
         sh = H - sb_h - pad * 3 - dh - (fab_inset - pad);
     }
-    if (dw < 80 || dh < 80 || sw < 80 || sh < 80) return;
+    /* On a small surface the full schematic + sidebar cannot fit. Show a
+     * compact, scrollable summary with the real device facts instead of
+     * returning an almost-empty screen. */
+    if (dw < 80 || dh < 80 || sw < 80 || sh < 80) {
+        const int avail_w = W - pad * 2;
+        const int avail_h = H - sb_h - pad * 2;
+        lv_obj_t* compact = lv_obj_create(root);
+        lv_obj_set_pos(compact, pad, sb_h + pad);
+        lv_obj_set_size(compact, avail_w > 1 ? avail_w : 1,
+                        avail_h > 1 ? avail_h : 1);
+        lv_obj_set_layout(compact, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(compact, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(compact, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_START);
+        lv_obj_set_style_pad_all(compact, ui_dpx(6, g_dpi), 0);
+        lv_obj_set_style_pad_row(compact, ui_dpx(6, g_dpi), 0);
+        lv_obj_set_style_bg_opa(compact, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(compact, 0, 0);
+        lv_obj_set_scroll_dir(compact, LV_DIR_VER);
+        lv_obj_set_scrollbar_mode(compact, LV_SCROLLBAR_MODE_OFF);
+        lv_obj_clear_flag(compact, LV_OBJ_FLAG_CLICKABLE);
+
+        const UiDeviceInfo& di = ui_device_info();
+        lv_obj_t* title = ui_make_label(compact, di.model[0] ? di.model : "Device",
+                                        ui_tokens().f_subtitle, g_pal.text);
+        lv_obj_set_width(title, LV_PCT(100));
+        lv_obj_set_height(title, ui_dpx(20, g_dpi));
+        lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_DOTS);
+        ui_fit_label(title, avail_w - ui_dpx(12, g_dpi), ui_tokens().f_subtitle);
+
+        char info[160];
+        snprintf(info, sizeof(info), "%s | %s | %s",
+                 di.android_version[0] ? di.android_version : "?",
+                 di.soc[0] ? di.soc : "?",
+                 di.memory[0] ? di.memory : "?");
+        lv_obj_t* detail = ui_make_label(compact, info, ui_tokens().f_caption,
+                                         g_pal.dim);
+        lv_obj_set_width(detail, LV_PCT(100));
+        lv_obj_set_height(detail, ui_dpx(16, g_dpi));
+        lv_label_set_long_mode(detail, LV_LABEL_LONG_MODE_DOTS);
+        ui_fit_label(detail, avail_w - ui_dpx(12, g_dpi), ui_tokens().f_caption);
+        return;
+    }
 
     lv_obj_t* diagram = ui_make_diagram(root, dw, dh);
     lv_obj_set_pos(diagram, dx, dy);
@@ -1618,24 +1725,29 @@ void build_home_screen(int /*dpi*/) {
                           LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_all(sidebar, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_row(sidebar, ui_dpx(12, g_dpi), LV_PART_MAIN);
-    /* Breathing room below the last panel when the sidebar is scrolled down,
-     * so the final status line never sits flush with the viewport edge. */
-    lv_obj_set_style_pad_bottom(sidebar, ui_tokens().lg, LV_PART_MAIN);
+    /* Breathing room below the last panel when the sidebar is scrolled down.
+     * The inset is at least the FAB band, so the final row can always be
+     * scrolled clear of the floating FAB instead of being clipped or covered.
+     * @breadcrumb BC-027 */
+    const int bottom_pad = fab_bottom_inset() > ui_tokens().lg
+                               ? fab_bottom_inset() : ui_tokens().lg;
+    lv_obj_set_style_pad_bottom(sidebar, bottom_pad, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sidebar, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(sidebar, 0, LV_PART_MAIN);
     lv_obj_set_scroll_dir(sidebar, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(sidebar, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(sidebar, LV_OBJ_FLAG_CLICKABLE);
+    /* The sidebar is a scroll container, not decoration: keep it hit-testable
+     * so a drag anywhere inside it scrolls to the panels below the fold. Its
+     * children are still hit first (deepest hit wins), so taps on buttons and
+     * demo rows are unaffected. @breadcrumb BC-004 */
 
-    /* LCD backlight (functional: drives the window brightness). */
-    lv_obj_t* backlight = ui_make_dashboard_panel(sidebar, "LCD %");
-    ui_make_stepper(backlight, g_brightness, 1, 100, 10, on_brightness_changed, nullptr);
-
-    /* Speaker volume (functional: drives the music stream volume). */
-    lv_obj_t* volume = ui_make_dashboard_panel(sidebar, "SPEAKER VOLUME %");
-    ui_make_stepper(volume, g_volume, 0, 100, 10, on_volume_changed, nullptr);
-
-    /* Power panel: simulated (Android apps cannot power off the device). */
+    /* Power panel is FIRST in the portrait sidebar. At 480 dpi the scroll
+     * viewport is ~964 px while the full panel needs ~790 px, so keeping it
+     * below the LCD/volume panels left "SLEEP & TOUCH TO WAKEUP" clipped at the
+     * fold and "SLEEP 10 SECONDS" permanently out of sight. First position
+     * keeps every power control fully visible without scrolling and clear of
+     * the bottom-right FAB; every other panel stays reachable by scrolling.
+     * All buttons and the live status line are preserved. @breadcrumb BC-027 */
     lv_obj_t* power = ui_make_dashboard_panel(sidebar, "POWER");
     lv_obj_t* off = ui_make_button(power, "OFF", UI_BUTTON_FILLED, true);
     lv_obj_set_width(off, LV_PCT(100));
@@ -1655,6 +1767,14 @@ void build_home_screen(int /*dpi*/) {
     lv_obj_add_event_cb(sleep_10s, on_power_clicked, LV_EVENT_CLICKED,
                         (void*)"SLEEP 10 SECONDS");
     g_power_status = ui_make_label(power, "No power action yet", 11, g_pal.dim);
+
+    /* LCD backlight (functional: drives the window brightness). */
+    lv_obj_t* backlight = ui_make_dashboard_panel(sidebar, "LCD %");
+    ui_make_stepper(backlight, g_brightness, 1, 100, 10, on_brightness_changed, nullptr);
+
+    /* Speaker volume (functional: drives the music stream volume). */
+    lv_obj_t* volume = ui_make_dashboard_panel(sidebar, "SPEAKER VOLUME %");
+    ui_make_stepper(volume, g_volume, 0, 100, 10, on_volume_changed, nullptr);
 
     /* RTC panel (live clock driven by the status-bar timer). */
     lv_obj_t* rtc = ui_make_dashboard_panel(sidebar, "RTC");
@@ -1732,7 +1852,7 @@ static lv_obj_t* ui_make_filled_button(lv_obj_t* parent, const char* text) {
     lv_obj_set_style_bg_color(b, g_pal.primary, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(b, 0, LV_PART_MAIN);
-    lv_obj_t* l = ui_make_label(b, text, 15, g_pal.on_primary);
+    lv_obj_t* l = ui_make_label(b, text, 15, contrasting_text(g_pal.primary, g_pal.on_primary));
     lv_obj_center(l);
     return b;
 }
@@ -1759,7 +1879,17 @@ lv_obj_t* ui_make_slider(lv_obj_t* parent, int value) {
 
 lv_obj_t* ui_make_switch(lv_obj_t* parent, bool on) {
     lv_obj_t* sw = lv_switch_create(parent);
+    /* OFF is a Material surface-variant track with an outline knob, not the
+     * LVGL default light grey that disappears on a dark card. */
+    lv_obj_set_style_bg_color(sw, mrole(MATERIAL_SURFACE_VARIANT), LV_PART_MAIN);
+    lv_obj_set_style_border_color(sw, g_pal.divider, LV_PART_MAIN);
+    lv_obj_set_style_border_width(sw, ui_dpx(1, g_dpi), LV_PART_MAIN);
     lv_obj_set_style_bg_color(sw, g_pal.primary, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(sw, g_pal.primary, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(sw, g_pal.dim, LV_PART_KNOB);
+    lv_obj_set_style_bg_color(sw, mrole(MATERIAL_ON_PRIMARY),
+                              LV_PART_KNOB | LV_STATE_CHECKED);
+    lv_obj_set_style_border_width(sw, 0, LV_PART_KNOB);
     if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
     return sw;
 }
@@ -1813,31 +1943,44 @@ lv_obj_t* ui_make_arc(lv_obj_t* parent, int value) {
     return arc;
 }
 
-static void make_dropdown(lv_obj_t* parent, const char* options) {
-    lv_obj_t* dd = lv_dropdown_create(parent);
-    lv_obj_set_width(dd, ui_dpx(170, g_dpi));
-    lv_dropdown_set_options(dd, options);
-    lv_obj_set_style_text_font(dd, ui_font(15, g_dpi), 0);
-    lv_obj_set_style_text_color(dd, g_pal.text, 0);
-    /* The theme leaves the box light; without an explicit background it stays
-     * white (with pale text) on a dark card. */
+/* Shared dropdown styling: the box, the popup list and (critically) the
+ * selected row all read the active palette. LVGL draws the list body with
+ * LV_PART_MAIN and the highlighted row with LV_PART_SELECTED; without the
+ * latter a dark theme shows a white popup with a bright blue selection.
+ * @breadcrumb BC-030 */
+void ui_style_dropdown(lv_obj_t* dd, int font_dp) {
+    if (!dd) return;
+    const lv_font_t* font = ui_font(font_dp, g_dpi);
+    lv_obj_set_style_text_font(dd, font, LV_PART_MAIN);
+    lv_obj_set_style_text_color(dd, g_pal.text, LV_PART_MAIN);
     lv_obj_set_style_bg_color(dd, g_pal.card, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(dd, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(dd, ui_dpx(1, g_dpi), LV_PART_MAIN);
     lv_obj_set_style_border_color(dd, g_pal.divider, LV_PART_MAIN);
     lv_obj_set_style_radius(dd, ui_dpx(10, g_dpi), LV_PART_MAIN);
-    /* Arrow indicator. */
     lv_obj_set_style_text_color(dd, g_pal.dim, LV_PART_INDICATOR);
-    /* The popup list is a separate object with its own (light) defaults. */
+
     lv_obj_t* list = lv_dropdown_get_list(dd);
-    if (list) {
-        lv_obj_set_style_bg_color(list, g_pal.card, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_text_color(list, g_pal.text, LV_PART_MAIN);
-        lv_obj_set_style_text_font(list, ui_font(15, g_dpi), LV_PART_MAIN);
-        lv_obj_set_style_border_width(list, ui_dpx(1, g_dpi), LV_PART_MAIN);
-        lv_obj_set_style_border_color(list, g_pal.divider, LV_PART_MAIN);
-    }
+    if (!list) return;
+    lv_obj_set_style_bg_color(list, g_pal.card, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(list, g_pal.text, LV_PART_MAIN);
+    lv_obj_set_style_text_font(list, font, LV_PART_MAIN);
+    lv_obj_set_style_border_width(list, ui_dpx(1, g_dpi), LV_PART_MAIN);
+    lv_obj_set_style_border_color(list, g_pal.divider, LV_PART_MAIN);
+    lv_obj_set_style_radius(list, ui_dpx(10, g_dpi), LV_PART_MAIN);
+    /* The selected row is drawn from LV_PART_SELECTED (see lv_dropdown.c). */
+    lv_obj_set_style_bg_color(list, mrole(MATERIAL_SECONDARY_CONTAINER), LV_PART_SELECTED);
+    lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SELECTED);
+    lv_obj_set_style_text_color(list, mrole(MATERIAL_ON_SECONDARY_CONTAINER), LV_PART_SELECTED);
+    lv_obj_set_style_text_font(list, font, LV_PART_SELECTED);
+}
+
+static void make_dropdown(lv_obj_t* parent, const char* options) {
+    lv_obj_t* dd = lv_dropdown_create(parent);
+    lv_obj_set_width(dd, ui_dpx(170, g_dpi));
+    lv_dropdown_set_options(dd, options);
+    ui_style_dropdown(dd, 15);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2153,11 +2296,18 @@ void build_game_screen(int /*dpi*/) {
 
 /* ---- Launcher app grid ---------------------------------------------------- */
 
+/* The app list is pushed from the UI thread but consumed on the LVGL thread.
+ * Keep two copies: the shared one protected by a mutex, and a build-time
+ * snapshot whose strings stay valid for the lifetime of the screen. */
+static std::mutex g_launcherMutex;
 static std::vector<std::string> g_launcherLabels;
 static std::vector<std::string> g_launcherPackages;
+static std::vector<std::string> g_launcherBuildLabels;
+static std::vector<std::string> g_launcherBuildPackages;
 
 void ui_set_launcher_apps(const char* const* labels, const char* const* packages,
                           int count) {
+    std::lock_guard<std::mutex> lock(g_launcherMutex);
     g_launcherLabels.clear();
     g_launcherPackages.clear();
     if (count <= 0) return;
@@ -2176,7 +2326,14 @@ static void on_launcher_app_clicked(lv_event_t* e) {
 }
 
 void build_launcher_screen(int /*dpi*/) {
-    if (g_launcherLabels.empty()) {
+    /* Snapshot under the lock; the build vectors are only ever touched on the
+     * LVGL thread, so their c_str() pointers stay valid for this screen. */
+    {
+        std::lock_guard<std::mutex> lock(g_launcherMutex);
+        g_launcherBuildLabels = g_launcherLabels;
+        g_launcherBuildPackages = g_launcherPackages;
+    }
+    if (g_launcherBuildLabels.empty()) {
         build_status_screen("Launcher Sample", "Installed Apps",
                             "Loading installed apps...",
                             "List populated from the Android package manager");
@@ -2190,7 +2347,7 @@ void build_launcher_screen(int /*dpi*/) {
     /* A scrollable list of app rows: robust at any density and width. */
     lv_obj_t* list = ui_make_column(body, UI_SPACE_SM);
     lv_obj_set_width(list, LV_PCT(100));
-    const size_t count = g_launcherLabels.size();
+    const size_t count = g_launcherBuildLabels.size();
     for (size_t i = 0; i < count; i++) {
         lv_obj_t* row = lv_obj_create(list);
         lv_obj_set_width(row, LV_PCT(100));
@@ -2206,12 +2363,11 @@ void build_launcher_screen(int /*dpi*/) {
         lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN);
         lv_obj_set_style_border_width(row, 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(row, g_pal.divider, LV_PART_MAIN);
-        /* The vector is stable for the lifetime of this screen. */
-        lv_obj_set_user_data(row, (void*)g_launcherPackages[i].c_str());
+        lv_obj_set_user_data(row, (void*)g_launcherBuildPackages[i].c_str());
         lv_obj_add_event_cb(row, on_launcher_app_clicked, LV_EVENT_CLICKED, nullptr);
 
         ui_make_label(row, LV_SYMBOL_HOME, 18, g_pal.primary);
-        lv_obj_t* name = ui_make_label(row, g_launcherLabels[i].c_str(), 14,
+        lv_obj_t* name = ui_make_label(row, g_launcherBuildLabels[i].c_str(), 14,
                                        g_pal.text);
         lv_obj_set_flex_grow(name, 1);
         lv_label_set_long_mode(name, LV_LABEL_LONG_MODE_DOTS);
@@ -2375,31 +2531,59 @@ void ui_layout_report(lv_obj_t* root) {
     }
 }
 
+/* Append formatted JSON without ever allowing pos to reach len. snprintf's
+ * return value is the *untruncated* length, so adding it blindly overflows the
+ * remaining-size argument on the next call and can corrupt the buffer. */
+static int json_append(char* buf, size_t len, int pos, const char* fmt, ...) {
+    if (!buf || len == 0) return 0;
+    if (pos < 0) pos = 0;
+    if (static_cast<size_t>(pos) >= len - 1) return static_cast<int>(len) - 1;
+    va_list ap;
+    va_start(ap, fmt);
+    int written = vsnprintf(buf + pos, len - static_cast<size_t>(pos), fmt, ap);
+    va_end(ap);
+    const int room = static_cast<int>(len) - pos;
+    if (written < 0) {
+        buf[pos] = '\0';
+        return static_cast<int>(len) - 1;
+    }
+    pos += written < room ? written : room - 1;
+    if (pos > static_cast<int>(len) - 1) pos = static_cast<int>(len) - 1;
+    return pos;
+}
+
 void ui_layout_report_json(lv_obj_t* root, char* buf, size_t len) {
+    if (!buf || len < 2) return;
     UiLayoutIssue issues[32];
     int n = ui_layout_check(root, issues, 32);
-    int pos = 0;
-    if (!buf || len == 0) return;
-    pos += snprintf(buf + pos, len - static_cast<size_t>(pos), "{\"issues\":[");
-    for (int i = 0; i < n && pos < static_cast<int>(len) - 1; i++) {
+    int pos = json_append(buf, len, 0, "{\"issues\":[");
+    /* Leave room for a complete issue plus the closing "]}"; a half-written
+     * object would be malformed JSON and the Kotlin gate fails closed. */
+    for (int i = 0; i < n && pos < static_cast<int>(len) - 264; i++) {
         const char* type = issues[i].type == 0 ? "overlap"
                          : issues[i].type == 1 ? "bounds" : "text";
-        pos += snprintf(buf + pos, len - static_cast<size_t>(pos),
-                        "%s{\"type\":\"%s\",\"rect\":[%d,%d,%d,%d],"
-                        "\"child\":\"%s\",\"parent\":\"%s\"",
-                        i ? "," : "", type,
-                        issues[i].x1, issues[i].y1, issues[i].x2, issues[i].y2,
-                        issues[i].child_class ? issues[i].child_class : "",
-                        issues[i].parent_class ? issues[i].parent_class : "");
+        pos = json_append(buf, len, pos,
+                          "%s{\"type\":\"%s\",\"rect\":[%d,%d,%d,%d],"
+                          "\"child\":\"%s\",\"parent\":\"%s\"",
+                          i ? "," : "", type,
+                          issues[i].x1, issues[i].y1, issues[i].x2, issues[i].y2,
+                          issues[i].child_class ? issues[i].child_class : "",
+                          issues[i].parent_class ? issues[i].parent_class : "");
+        if (pos >= static_cast<int>(len) - 1) break;
         if (issues[i].b >= 0) {
-            pos += snprintf(buf + pos, len - static_cast<size_t>(pos),
-                            ",\"rect2\":[%d,%d,%d,%d]",
-                            issues[i].bx1, issues[i].by1,
-                            issues[i].bx2, issues[i].by2);
+            pos = json_append(buf, len, pos, ",\"rect2\":[%d,%d,%d,%d]",
+                              issues[i].bx1, issues[i].by1,
+                              issues[i].bx2, issues[i].by2);
+            if (pos >= static_cast<int>(len) - 1) break;
         }
-        pos += snprintf(buf + pos, len - static_cast<size_t>(pos), "}");
+        pos = json_append(buf, len, pos, "}");
     }
-    snprintf(buf + pos, len - static_cast<size_t>(pos), "]}");
+    /* Always terminate the document, even when the issue list was truncated. */
+    if (pos > static_cast<int>(len) - 2) pos = static_cast<int>(len) - 2;
+    if (pos < 0) pos = 0;
+    buf[pos++] = ']';
+    buf[pos++] = '}';
+    buf[pos] = '\0';
 }
 
 /* The lint runs on every screen build; disable it to silence the warnings. */
@@ -2446,6 +2630,25 @@ void launch_screen(int screen_id, int dpi, const UiTheme& theme) {
     if (screen_id != SCREEN_SHOWCASE) {
         ui_reset_showcase();
     }
+
+    /* A snackbar's auto-dismiss timer outlives the object when the showcase or
+     * an app screen bypasses make_screen(). Tear it down here, at the single
+     * entry point for every build. */
+    if (g_snackbar_timer) {
+        lv_timer_delete(g_snackbar_timer);
+        g_snackbar_timer = nullptr;
+    }
+    g_snackbar = nullptr;
+
+    /* Status labels are screen-owned and freed by lv_obj_clean(). Clear the
+     * cached pointer AND the screen's user-data slot before every build, so
+     * nativeSetStatusText can never write to a label from the old screen. */
+    g_status_label = nullptr;
+    if (lv_screen_active()) lv_obj_set_user_data(lv_screen_active(), nullptr);
+
+    /* App-screen node ids are also screen-owned. Built-in screens must not
+     * keep a map pointing at freed objects from a previous Kotlin screen. */
+    if (screen_id < APP_SCREEN_BASE) ui_reset_app_screen();
 
     g_dpi = dpi > 0 ? dpi : 440;
     g_theme = theme;
