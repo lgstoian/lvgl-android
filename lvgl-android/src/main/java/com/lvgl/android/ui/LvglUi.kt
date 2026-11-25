@@ -6,6 +6,7 @@
 package com.lvgl.android.ui
 
 import com.lvgl.android.engine.LvglEngine
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Registry of app-defined LVGL screens.
@@ -46,6 +47,16 @@ object LvglUi {
      */
     private val callbacks = mutableMapOf<Int, Map<String, (LvglUiEvent) -> Unit>>()
 
+    /**
+     * Id-assigned trees of registered screens. The native kit renders these, and
+     * the accessibility bridge mirrors them as virtual Android views; see
+     * [snapshot].
+     */
+    private val trees = mutableMapOf<Int, List<LvglNode>>()
+
+    /** Internal observers (currently the accessibility bridge); LVGL thread safe. */
+    private val observers = CopyOnWriteArrayList<LvglUiObserver>()
+
     internal val receiver = LvglUiEventReceiver { screenId, nodeId, type, value ->
         val event = when (type) {
             "click" -> LvglUiEvent.Click(nodeId)
@@ -53,9 +64,12 @@ object LvglUi {
             "toggle" -> LvglUiEvent.Toggled(nodeId, value != 0)
             "select" -> LvglUiEvent.Selected(nodeId, value)
             else -> null
-        } ?: return@LvglUiEventReceiver
-        callbacks[screenId]?.get(nodeId)?.invoke(event)
-        currentListener?.onUiEvent(screenId, event)
+        }
+        if (event != null) {
+            callbacks[screenId]?.get(nodeId)?.invoke(event)
+            currentListener?.onUiEvent(screenId, event)
+        }
+        observers.forEach { it.onEvent(screenId, nodeId, type, value) }
     }
 
     private var currentListener: LvglUiListener? = null
@@ -91,6 +105,7 @@ object LvglUi {
         scope.content()
         val (json, assigned) = LvglJson.encodeWithIds(scope.snapshot())
         callbacks[id] = collectCallbacks(assigned)
+        trees[id] = assigned
         /* The receiver is always installed so node callbacks work even when no
          * global listener is set. */
         LvglEngine.instance.uiEventListener = receiver
@@ -100,7 +115,30 @@ object LvglUi {
     /** Removes a previously registered screen. */
     fun unregisterScreen(id: Int) {
         callbacks.remove(id)
+        trees.remove(id)
         LvglEngine.instance.unregisterScreen(id)
+    }
+
+    /**
+     * Read-only snapshot of the id-assigned tree of [screenId], or `null` when
+     * that screen has no registered Kotlin UI-builder tree.
+     *
+     * The returned list is a shallow copy; [LvglNode] instances are immutable
+     * data classes, so the caller cannot mutate the registered tree. Used by
+     * the accessibility bridge to build virtual Android views; runtimes values
+     * (checked/value/text) may have changed since registration and are tracked
+     * separately by the bridge.
+     */
+    internal fun snapshot(screenId: Int): List<LvglNode>? = trees[screenId]?.toList()
+
+    /** Registers an internal state observer. Safe to call from any thread. */
+    internal fun addObserver(observer: LvglUiObserver) {
+        observers.add(observer)
+    }
+
+    /** Removes a previously registered internal state observer. */
+    internal fun removeObserver(observer: LvglUiObserver) {
+        observers.remove(observer)
     }
 
     /**
@@ -129,6 +167,7 @@ object LvglUi {
             visible?.let { put("visible", it) }
         }.toString()
         LvglEngine.instance.updateNode(screenId, nodeId, json)
+        observers.forEach { it.onNodeUpdated(screenId, nodeId, text, value, checked, visible) }
     }
 
     /** Flattens the node callbacks of a tree into a node-id -> handler map. */
@@ -179,4 +218,25 @@ object LvglUi {
         walk(nodes)
         return map
     }
+}
+
+/**
+ * Internal state hook for framework components that mirror the UI tree, such
+ * as the accessibility node provider. Callbacks run on the thread that
+ * delivered the event (normally the LVGL render thread), so implementations
+ * must marshal Android UI work to the main thread.
+ */
+internal interface LvglUiObserver {
+    /** A node event arrived from native or was synthesised by the bridge. */
+    fun onEvent(screenId: Int, nodeId: String, type: String, value: Int) {}
+
+    /** [LvglUi.updateNode] changed one or more node properties. */
+    fun onNodeUpdated(
+        screenId: Int,
+        nodeId: String,
+        text: String?,
+        value: Int?,
+        checked: Boolean?,
+        visible: Boolean?,
+    ) {}
 }

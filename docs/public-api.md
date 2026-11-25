@@ -1,9 +1,12 @@
 # Public API reference
 
-Concise reference for the public Kotlin API in `com.lvgl.android`. It documents
-only what exists in `lvgl-android/src/main/java/com/lvgl/android/`. For a
-step-by-step walkthrough see [quickstart.md](quickstart.md); for the architecture
-see [README.md](../README.md).
+Concise reference for the public Kotlin API in `com.lvgl.android`, updated for
+**v1.2.0**. It documents only what exists in
+`lvgl-android/src/main/java/com/lvgl/android/` — internal helpers such as the
+accessibility node provider are deliberately not listed. For a step-by-step
+walkthrough see [quickstart.md](quickstart.md); for the architecture and trade
+offs see [README.md](../README.md); for using these APIs inside an ordinary
+Android app see [interop.md](interop.md).
 
 Visibility notes: classes that apps are expected to subclass are marked
 `abstract`/`open`; constructors and methods shown are public unless noted.
@@ -144,6 +147,13 @@ value)`, `Toggled(nodeId, checked)` and `Selected(nodeId, index)`.
 shared engine on `surfaceChanged`, rebinds on recreation, and forwards
 `MotionEvent`s to `LvglEngine.onTouchEvent()` (actions: 0 = down, 1 = up,
 2 = move). Public lifecycle methods: `onResume()`, `onPause()`, `destroy()`.
+Since v1.2.0 it also overrides `getAccessibilityNodeProvider()` to expose
+virtual TalkBack nodes for `LvglUi` app screens (ids ≥ 1000); see
+[accessibility.md](accessibility.md).
+
+It is a normal view: host it in a plain Activity/Fragment layout or a Compose
+`AndroidView`, forwarding the lifecycle methods above. Only one display is live
+at a time. [interop.md](interop.md) has the recipes.
 
 ```kotlin
 val view = LvglSurfaceView(context)
@@ -371,16 +381,29 @@ class MyGame : LvglGameActivity() {
 ### `LvglCameraPreview`
 
 Camera2 preview helper. `open(cameraId = "0")` opens the camera and starts a
-repeating preview into an internal `ImageReader` (frames are drained, not
-displayed, so it does not fight LVGL for the window). `startPreview(surface)`
-redirects the preview into a caller-supplied `Surface`; `stopPreview()` and
-`close()` release the camera. The sample itself reports status in LVGL and does
-not render camera imagery on screen — frames are processed locally.
+repeating preview; with no surface supplied it drains frames into an internal
+`ImageReader` so it does not fight LVGL for the window. Call
+`startPreview(surface)` **before** `open()` to target a caller-supplied
+`Surface` — the sample passes the surface of a native `SurfaceView` composited
+above the LVGL screen. `onOpenResult` reports the real open outcome (on the
+Camera2 thread), `allCameraIds()` enumerates logical and physical sensors, and
+`stopPreview()` / `close()` release the session and device.
+
+Since v1.2.0: `selectPreviewSize(cameraId, target)` picks the available
+`YUV_420_888` size whose aspect ratio is closest to `target` and stores it;
+`chosenPreviewSize` exposes the selected size. Apps rendering into their own
+surface should size/letterbox it to that aspect instead of stretching it.
 
 ```kotlin
 val preview = LvglCameraPreview(this)
+val size = preview.selectPreviewSize("0", Size(width, height))
+preview.startPreview(surface)
 preview.open("0")
 ```
+
+The `CAMERA` permission is required and must be requested at runtime; denial
+leaves the rest of the app usable. See [interop.md](interop.md) for the full
+overlay pattern.
 
 ## system
 
@@ -479,14 +502,28 @@ Object that announces LVGL focus changes: `initialize(context)` and
 LvglScreenReader.announce(this, "Widget showcase")
 ```
 
+### Accessibility coverage note
+
+The public classes above (`LvglAccessibilityManager`, `LvglScreenReader`,
+`LvglAccessibilityDelegate`, `LvglFocusNavigation`) provide announcements,
+state and focus navigation. TalkBack virtual nodes for `LvglUi` app screens are
+provided internally by `LvglSurfaceView.getAccessibilityNodeProvider()`; they
+are documented, but not a public ABI, in [accessibility.md](accessibility.md).
+
 ## perf
 
 ### `LvglPerformanceMonitor`
 
 Object that tracks FPS and frame times: `start()`, `stop()`,
 `onFrameRendered()`, `getFps()`, `getFrameCount()`, `getStats()` and
-`resetStats()`. Call `onFrameRendered()` once per rendered frame.
+`resetStats()`. Call `onFrameRendered()` once per rendered frame, from a single
+thread. There is no native frame-callback JNI export yet, so the app must
+drive this sink (the game sample does); call all methods from the same thread.
+It is a debugging aid, not a production profiler. See
+[performance.md](performance.md) for the measurement command and caveats.
 
 ```kotlin
+LvglPerformanceMonitor.start()
 LvglPerformanceMonitor.onFrameRendered()
+val stats = LvglPerformanceMonitor.getStats()
 ```

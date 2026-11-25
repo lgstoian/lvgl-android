@@ -129,9 +129,11 @@ public final class com/lvgl/android/camera/LvglCameraPreview {
 	public fun <init> (Landroid/content/Context;)V
 	public final fun allCameraIds ()Ljava/util/List;
 	public final fun close ()V
+	public final fun getChosenPreviewSize ()Landroid/util/Size;
 	public final fun getOnOpenResult ()Lkotlin/jvm/functions/Function2;
 	public final fun open (Ljava/lang/String;)V
 	public static synthetic fun open$default (Lcom/lvgl/android/camera/LvglCameraPreview;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun selectPreviewSize (Ljava/lang/String;Landroid/util/Size;)Landroid/util/Size;
 	public final fun setOnOpenResult (Lkotlin/jvm/functions/Function2;)V
 	public final fun startPreview (Landroid/view/Surface;)V
 	public final fun stopPreview ()V
@@ -1078,6 +1080,7 @@ public class com/lvgl/android/view/LvglSurfaceView : android/view/SurfaceView, a
 	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;I)V
 	public synthetic fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun destroy ()V
+	public fun getAccessibilityNodeProvider ()Landroid/view/accessibility/AccessibilityNodeProvider;
 	public final fun onPause ()V
 	public final fun onResume ()V
 	public fun onTouchEvent (Landroid/view/MotionEvent;)Z

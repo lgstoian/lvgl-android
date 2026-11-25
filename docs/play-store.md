@@ -1,7 +1,9 @@
 # Google Play readiness checklist
 
-Maps the project to Google Play's published requirements. The machine-checkable
-items are enforced by `PlayComplianceGuardTest`.
+Maps the project to Google Play's published requirements for v1.2.0. The
+machine-checkable items are enforced by `PlayComplianceGuardTest`. **The gates
+check project-side artifacts only: Play Console forms, the store listing and
+the privacy-policy URL remain a manual user step.**
 
 ## Target API level
 
@@ -108,6 +110,24 @@ The gates operate on what actually ships, not just the debug build: [BC-037]
   AGP/SDK mismatch.
 - **Emulator coverage**: CI emulator jobs use API 36 as the primary image, with
   API 34 diagnostic fallbacks.
+
+## Manual Play Console steps (not covered by any gate)
+
+The repository can produce a signed, verified AAB; it cannot configure your
+Play Console account. A human must still:
+
+1. Create/select the app and complete the **data-safety form** honestly (the
+   sample collects no personal data; see [PRIVACY.md](../PRIVACY.md)).
+2. Publish the privacy policy and paste its URL into the listing.
+3. Write the store listing: title, short/full description, screenshots and
+   graphics (the local screenshots are documentation assets, not a substitute).
+4. Upload the signed AAB, complete the release notes and choose the rollout.
+5. Enrol the upload key in Play App Signing and keep backups of the signing
+   material (`LVGL_KEYSTORE*` secrets are used by the release workflow).
+6. Review the target-API declaration and any country/device restrictions.
+
+If the app exposes TalkBack behaviour, describe its actual coverage honestly:
+the node provider covers `LvglUi` app screens only ([accessibility.md](accessibility.md)).
 
 ## Release checklist
 

@@ -1,8 +1,13 @@
 # Your first LVGL Android app in 5 minutes
 
 This guide gets a minimal LVGL app running against the framework in this
-repository. For the full API surface see [public-api.md](public-api.md); for a
-ready-made project see [template/](../template/README.md); for build
+repository. The framework is a **general Android UI framework**: the template
+builds a whole-LVGL activity, but you can also put an `LvglSurfaceView` inside
+an existing Compose/XML app. Read the trade-offs in
+[README.md](../README.md#why--when-to-use-this) first, then see
+[interop.md](interop.md) and [migration.md](migration.md) for incremental
+adoption and exit. For the full API surface see [public-api.md](public-api.md);
+for a ready-made project see [template/](../template/README.md); for build
 environment setup see [BUILDING.md](../BUILDING.md).
 
 ## 1. Prerequisites
@@ -58,9 +63,12 @@ class MainActivity : LvglActivity() {
 }
 ```
 
-**Do not call `setContentView()`** from a subclass: it replaces the LVGL
-`SurfaceView` and produces a greyed-out, non-responsive UI. The base class owns
-the root layout (see `BC-010` in [agent-breadcrumbs.json](agent-breadcrumbs.json)).
+**Do not call `setContentView()`** from an `LvglActivity` subclass: it replaces
+the LVGL `SurfaceView` and produces a greyed-out, non-responsive UI. The base
+class owns the root layout (see `BC-010` in
+[agent-breadcrumbs.json](agent-breadcrumbs.json)). A plain Activity hosting an
+`LvglSurfaceView` may use `setContentView()` normally; see
+[interop.md](interop.md) and the sample's `HybridSampleActivity`.
 
 ## 4. Screens: labels and buttons
 
@@ -76,7 +84,7 @@ in `lvgl-android/src/main/cpp/demo_ui.h`:
 | 1 | Widget Showcase | LVGL label + "Tap me" button, switch, checkbox, slider, arc, dropdown |
 | 2 | Layout Showcase | Flex rows/columns/grids, cards and sections |
 | 3 | Interactive Demo | Full-screen touch surface with a draggable marker |
-| 4 | Camera Sample | Camera2 preview status page |
+| 4 | Camera Sample | LVGL status page plus a native Camera2 preview overlay, aspect-fitted and tap-to-cycle |
 | 5 | Game Sample | Status page driven by `onGameLoop()` |
 | 6 | Launcher Sample | Installed-app list status page |
 | 7 | Showcase | Animated spring-physics launcher demo |
@@ -287,4 +295,17 @@ adb shell am start -n com.lvgl.sample/.MainActivity
 ```
 
 Useful logcat tags while debugging: `LvglActivity`, `LvglEngine`,
-`LvglSurfaceView`, `LVGLPort`, `LVGLLayout` (layout lint).
+`LvglSurfaceView`, `LVGLPort`, `LVGLLayout` (layout lint), `LvglPerfMon`
+(frame statistics) and `LvglAccessibilityManager` (TalkBack state).
+
+## 10. Where to go next
+
+- [interop.md](interop.md) — host the surface in a plain Activity, Fragment or
+  Compose `AndroidView`; put native views above LVGL; escape hatches.
+- [migration.md](migration.md) — adopt one screen at a time, or exit back to
+  Compose/XML.
+- [accessibility.md](accessibility.md) — exactly what TalkBack sees and what it
+  does not.
+- [performance.md](performance.md) — measure with `LvglPerformanceMonitor` and
+  understand the custom render thread.
+- [public-api.md](public-api.md) — every public class in `com.lvgl.android`.

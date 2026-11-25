@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-25
+
+General Android adoption release: the framework is now positioned and
+documented for use inside an ordinary Android app, with interop, accessibility
+and escape hatches treated as first-class features. VersionCode 3.
+
+### Added
+
+- `HybridSampleActivity` (`com.lvgl.sample`, not exported): a plain
+  `AppCompatActivity`-style host that mixes `LvglSurfaceView` with native
+  Android views and proves both directions of the bridge — native buttons
+  switch LVGL screens and push text via `LvglUi.updateNode()`, and LVGL node
+  events reach a native `TextView` through `LvglUi.listener` on the UI thread.
+- Accessibility node-provider bridge: `LvglSurfaceView.getAccessibilityNodeProvider()`
+  returns an internal provider that mirrors `LvglUi` app screens (ids ≥ 1000)
+  as virtual TalkBack nodes, with clickable/checkable/range state, focus and
+  progress actions, and events pushed back through `LvglUi.updateNode()`.
+  The exact scope and native-view fallback are documented in
+  [docs/accessibility.md](docs/accessibility.md).
+- `IntegrationGuardTest` with seven fail-closed wiring detectors and canaries:
+  `wired-multiwindow-pip`, `wired-gesture-results`, `wired-performance-caller`,
+  `wired-launcher-receiver`, `wired-accessibility-announcements`,
+  `wired-camera-permission` and `wired-ui-event-bridge`. A feature existing in
+  source is no longer treated as evidence that it is actually wired. [BC-037]
+- Governance and adoption docs: `docs/interop.md`, `docs/accessibility.md`,
+  `docs/performance.md`, `docs/migration.md`, `SECURITY.md` and `SUPPORT.md`;
+  CONTRIBUTING, README, quickstart, public API, Play and release-checklist
+  documentation updated.
+- Camera interop: `LvglCameraPreview.allCameraIds()` enumerates logical and
+  physical sensors, and the sample cycles them on tap.
+
+### Changed
+
+- The framework is documented as a **general Android UI framework** with an
+  honest trade-off table and pointers to interop and migration. It is no longer
+  positioned as embedded-only or as a wholesale replacement for Compose/XML.
+- `LvglCameraPreview.selectPreviewSize(cameraId, target)` and the
+  `chosenPreviewSize` property choose the available YUV_420_888 size with the
+  closest aspect ratio; the native preview overlay is letterboxed/centred to
+  that aspect instead of being stretched into a fixed box.
+- Supported-version matrix, security reporting and PR/CI expectations are
+  documented in `SECURITY.md`, `SUPPORT.md` and `CONTRIBUTING.md`.
+- Play Console forms, the store listing and the privacy-policy URL are stated
+  explicitly as manual user steps; CI gates cover the project-side artifacts
+  only.
+
+### Fixed
+
+- The camera sample's preview no longer stretches or crops: its surface is
+  fitted to the camera sensor's aspect ratio, recomputed on camera switch and
+  configuration change.
+- Features that were implemented but not called are now caught: integration
+  guards verify call paths (gesture results, performance sink, launcher
+  receiver, accessibility announcements, camera permission and UI event bridge)
+  and fail closed on missing sources. [BC-037]
+
 ## [1.1.0] - 2026-11-24
 
 Release-artifact integrity: fail-closed gates, a smoke test of the shipped APK,

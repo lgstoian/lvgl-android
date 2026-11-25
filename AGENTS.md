@@ -17,7 +17,37 @@ If you encounter an issue, check `ai-context.md` first. If you discover a new is
 
 ## Project Overview
 
-This project is an Android framework for building apps using LVGL (Light and Versatile Graphics Library) v9.6.0. The framework provides Kotlin-first APIs for creating activities, keyboards (IME), launchers, games, and camera apps with custom LVGL-based UI.
+This project is a **general Android framework** built on LVGL (Light and Versatile Graphics Library) v9.6.0, not an embedded-only toolkit. It provides Kotlin-first APIs for activities, keyboards (IME), launchers, games, and camera apps, and it can also supply a single `LvglSurfaceView` inside an otherwise normal Compose/XML app. Do not position it as requiring a wholesale replacement of the Android UI toolkit: see the trade-offs and escape hatches in [README.md](README.md#why--when-to-use-this), [docs/interop.md](docs/interop.md) and [docs/migration.md](docs/migration.md).
+
+## Interop & adoption rules
+
+- The engine is process-wide; a display is owner-scoped. Host **one live
+  `LvglSurfaceView` at a time**; it binds/unbinds on surface callbacks and
+  rebinds a same-size surface instead of rebuilding it.
+- `LvglSurfaceView` is a normal `SurfaceView`: use it in a plain
+  Activity/Fragment layout or a Compose `AndroidView`, and forward
+  `onResume()` / `onPause()` / `destroy()` from the host lifecycle. Only
+  `LvglActivity` subclasses must avoid `setContentView()`. The sample app's
+  `HybridSampleActivity` uses `addContentView()` to keep its guard happy, but
+  consumer apps may use `setContentView()` normally.
+- Native Android views composited *above* LVGL set their own overlay flags
+  (`setZOrderOnTop(true)`, `setZOrderMediaOverlay(true)`); `LvglSurfaceView`
+  deliberately does not. `CameraSampleActivity` is the proof. For camera
+  overlays use `LvglCameraPreview.startPreview(surface)` before `open()`, and
+  `selectPreviewSize(cameraId, target)` / `chosenPreviewSize` to aspect-fit the
+  preview; enumerate all cameras with `allCameraIds()` (logical + physical) and
+  cycle on tap.
+- LVGL-thread callbacks (`LvglUi.listener`, node callbacks, `ScreenNavigator`)
+  must hop to the UI thread before touching Android views.
+- TalkBack virtual nodes exist only for `LvglUi` app screens (ids ≥ 1000), via
+  `LvglSurfaceView.getAccessibilityNodeProvider()` → internal
+  `LvglNodeAccessibilityProvider`. Built-in screens, exact geometry, native
+  scroll/IME semantics are out of scope; use a native view fallback. See
+  [docs/accessibility.md](docs/accessibility.md).
+- `LvglPerformanceMonitor` has no automatic native frame callback yet: the app
+  must call `onFrameRendered()` itself. Never invent measured numbers in docs;
+  the results table in [docs/performance.md](docs/performance.md) stays a
+  placeholder until a hardware run.
 
 ## Environment Setup
 
@@ -136,6 +166,10 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 15. **Balanced size optimisation**: R8 full mode + resource shrinking + per-ABI splits + static C++ STL + legacy native packaging + `resConfigs("en")`; 1.31 MB arm64-v8a, 1.33 MB x86_64, 2.06 MB universal APK, 4.13 MB AAB. [BC-031]
 16. **Developer toolkit**: quickstart, public API reference, `template/`, the `com.lvgl.android.app` Gradle plugin, consumer ProGuard rules and a binary-compatibility API dump. [BC-032]
 17. **Kotlin UI builder**: apps declare their own screens with the `LvglUi` DSL; the tree is serialised to JSON and rendered by the native UI kit, with node callbacks and `updateNode()` for interactivity. App screen ids start at 1000. [BC-033]
+18. **Interop is a first-class surface**: `LvglSurfaceView` works in plain Activity/Fragment/Compose hosts, native views can be composited above it, and `HybridSampleActivity` proves both directions of the bridge with no JNI changes.
+19. **Accessibility node bridge**: `LvglSurfaceView.getAccessibilityNodeProvider()` returns an internal provider that mirrors `LvglUi` app screens (ids ≥ 1000) as virtual Android nodes; built-in screens and exact geometry are not exposed, so a native-view fallback is documented.
+20. **Integration guards**: `IntegrationGuardTest` verifies that features are wired through their call paths (multiwindow, gestures, perf sink, launcher receiver, announcements, camera permission, UI events), with fail-closed canaries. [BC-037]
+21. **Camera interop**: `LvglCameraPreview.selectPreviewSize(cameraId, target)` picks the closest-aspect YUV size and the sample letterboxes its native preview overlay; all camera ids (logical + physical) are enumerated for tap-to-cycle.
 
 ## UI Development Rules (LVGL)
 
@@ -180,6 +214,14 @@ are listed under "Guard Test Protection" below. Each rule is backed by a
   so it re-themes automatically. App screen ids start at 1000. [BC-033]
 - Node callbacks and `LvglUi.listener` run on the LVGL thread; switch to the UI
   thread before touching Android views. [BC-033]
+- Host one live `LvglSurfaceView` at a time; forward its `onResume`/`onPause`/
+  `destroy()` from a plain Activity, Fragment or Compose `AndroidView`. See
+  [docs/interop.md](docs/interop.md).
+- Native views above LVGL set their own overlay flags; do not enable
+  `setZOrderOnTop(true)` on `LvglSurfaceView` itself (it hides in-app dialogs).
+- Accessibility work must stay within the documented node-provider scope
+  (`LvglUi` screens ≥ 1000); anything needing real bounds or native semantics
+  belongs in a native view. See [docs/accessibility.md](docs/accessibility.md).
 
 ## AI Agent Breadcrumbs & Machine-Readable Comments
 
@@ -206,6 +248,12 @@ are listed under "Guard Test Protection" below. Each rule is backed by a
   must fail the gate, never read as "clean". Every detector needs a canary that
   must be detected, a clean fixture that must not be, and a wiring canary proving
   the detector is actually invoked. See `BC-037`.
+- `IntegrationGuardTest` (v1.2.0) adds seven wiring detectors:
+  `wired-multiwindow-pip`, `wired-gesture-results`, `wired-performance-caller`,
+  `wired-launcher-receiver`, `wired-accessibility-announcements`,
+  `wired-camera-permission` and `wired-ui-event-bridge`. Presence of a file or
+  method is not evidence that it is called; change the detector **and** its
+  canary together.
 
 ## Hard Rules (enforced from user requirements)
 
@@ -248,15 +296,18 @@ android_lvgl/
 ├── lvgl-android/               # Framework library module
 │   ├── src/main/java/com/lvgl/android/
 │   │   ├── engine/            # LvglEngine (singleton)
-│   │   ├── view/              # LvglSurfaceView
+│   │   ├── view/              # LvglSurfaceView (+ accessibility provider)
 │   │   ├── activity/          # LvglActivity base
 │   │   ├── config/            # DPI, display metrics, configuration
 │   │   ├── theme/             # MaterialTheme, MaterialPalette, LvglThemeBridge
 │   │   ├── window/            # MultiWindowManager
-│   │   ├── input/             # LvglInputMethodService
+│   │   ├── input/             # LvglInputMethodService, gestures
 │   │   ├── launcher/          # LvglLauncherActivity
 │   │   ├── game/              # LvglGameActivity
-│   │   ├── camera/            # LvglCameraPreview
+│   │   ├── camera/            # LvglCameraPreview (aspect-fit preview sizes)
+│   │   ├── accessibility/     # Manager, focus navigation, screen reader, node provider
+│   │   ├── perf/              # LvglPerformanceMonitor
+│   │   ├── navigation/        # LvglNavigation
 │   │   ├── system/            # LvglSystemControl, LvglDeviceInfo
 │   │   ├── ui/                # LvglUi DSL, nodes, events, JSON wire format
 │   │   └── util/              # LvglLog
@@ -266,13 +317,16 @@ android_lvgl/
 ├── app/                        # Sample application
 ├── build-logic/               # Included build: com.lvgl.android.app plugin
 ├── template/                   # Copyable standalone app project
-├── docs/                       # Quickstart, public API, release checklist
+├── docs/                       # Quickstart, API, interop, accessibility, performance, migration, release checklist
 ├── tools/                      # Dynamic harness, size report, version bump
 ├── screenshots/                # Screenshots for documentation
 ├── ai-context.md               # Known issues and quirks
 ├── AGENTS.md                   # This file
 ├── BUILDING.md                 # Quick start guide
+├── CONTRIBUTING.md             # PR process, CI and guard rules
 ├── ROADMAP.md                  # Development roadmap
 ├── CHANGELOG.md                # Release notes
-└── README.md                   # Architecture overview
+├── SECURITY.md                 # Vulnerability reporting, supported versions
+├── SUPPORT.md                  # Support policy and version matrix
+└── README.md                   # Architecture overview and trade-offs
 ```

@@ -123,6 +123,26 @@ class GuardCanaryTest {
         assertFalse(GuardRules.isUserVisible("12345"))
     }
 
+    @Test
+    fun annotationArgumentKeyIsNotAUserVisibleString() {
+        val clean = """
+            @SuppressLint("MissingPermission")
+            fun openCamera() = Unit
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: an annotation key must not be treated as user prose",
+            GuardRules.detectHardcodedUserStrings("CameraSampleActivity.kt", clean).isEmpty(),
+        )
+
+        // Excluding the annotation must not blank out the whole line.
+        val mixed = """@SuppressLint("MissingPermission") fun f() = setStatus("Welcome to the demo")"""
+        val hits = GuardRules.detectHardcodedUserStrings("CameraSampleActivity.kt", mixed)
+        assertTrue(
+            "Canary failed: a user-visible literal after an annotation must still be caught",
+            hits.any { "Welcome to the demo" in it.text },
+        )
+    }
+
     // ---- single-source-of-truth detector ----------------------------------
 
     @Test
@@ -708,6 +728,458 @@ class GuardCanaryTest {
         assertTrue(
             "Canary failed: a named API-34 fallback must not fail the guard",
             GuardRules.detectReleaseWorkflowGaps(ci, withFallback).isEmpty(),
+        )
+    }
+
+    // ---- feature-wiring detectors ------------------------------------------
+
+    private fun featureMap(vararg entries: Pair<String, String>): Map<String, String> = mapOf(*entries)
+
+    @Test
+    fun multiWindowWiringDetectorCatchesUnwiredActivity() {
+        val clean = """
+            class LvglActivity {
+                protected val multiWindowManager: MultiWindowManager by lazy {
+                    MultiWindowManager(this)
+                }
+                override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
+                    multiWindowManager.onMultiWindowModeChanged(isInMultiWindowMode)
+                }
+                override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+                    multiWindowManager.onPictureInPictureModeChanged(isInPictureInPictureMode)
+                }
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: clean multi-window wiring must pass",
+            GuardRules.detectMultiWindowWiring(
+                featureMap(GuardRules.FEATURE_ACTIVITY to clean)
+            ).isEmpty(),
+        )
+
+        val broken = """
+            class LvglActivity {
+                override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
+                    super.onMultiWindowModeChanged(isInMultiWindowMode)
+                }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectMultiWindowWiring(
+            featureMap(GuardRules.FEATURE_ACTIVITY to broken)
+        )
+        listOf(
+            "override onPictureInPictureModeChanged",
+            "construct a MultiWindowManager",
+            "onMultiWindowModeChanged must forward",
+            "onPictureInPictureModeChanged must forward",
+        ).forEach { part ->
+            assertTrue(
+                "Canary failed: detector must catch '$part' in an unwired activity",
+                hits.any { part in it.reason },
+            )
+        }
+    }
+
+    @Test
+    fun gestureResultWiringDetectorCatchesDroppedDirectResult() {
+        val clean = """
+            class LvglInputProcessor {
+                private val recognizer = GestureRecognizer()
+                fun process(frame: GestureFrame): Gestures? {
+                    val direct = recognizer.handle(frame)
+                    return direct ?: recognizer.consumeLastGesture()
+                }
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: clean gesture wiring must pass",
+            GuardRules.detectGestureResultWiring(
+                featureMap(GuardRules.FEATURE_INPUT_PROCESSOR to clean)
+            ).isEmpty(),
+        )
+
+        val dropped = """
+            class LvglInputProcessor {
+                private val recognizer = GestureRecognizer()
+                fun process(frame: GestureFrame): Gestures? {
+                    val direct = recognizer.handle(frame)
+                    return recognizer.consumeLastGesture()
+                }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectGestureResultWiring(
+            featureMap(GuardRules.FEATURE_INPUT_PROCESSOR to dropped)
+        )
+        assertTrue(
+            "Canary failed: a discarded handle() result must be caught",
+            hits.any { "direct handle()" in it.reason },
+        )
+
+        val ignored = """
+            class LvglInputProcessor {
+                private val recognizer = GestureRecognizer()
+                fun process(frame: GestureFrame): Gestures? {
+                    recognizer.handle(frame)
+                    return recognizer.consumeLastGesture()
+                }
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: calling handle() without capturing its result must be caught",
+            GuardRules.detectGestureResultWiring(
+                featureMap(GuardRules.FEATURE_INPUT_PROCESSOR to ignored)
+            ).isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun performanceSinkCallerDetectorCatchesMissingCaller() {
+        val clean = """
+            class GameSampleActivity : LvglGameActivity() {
+                private val tick = Runnable {
+                    onGameLoop(16L)
+                    LvglPerformanceMonitor.onFrameRendered()
+                }
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: a real onFrameRendered() caller must pass",
+            GuardRules.detectPerformanceSinkCaller(
+                featureMap(GuardRules.FEATURE_GAME_SAMPLE to clean)
+            ).isEmpty(),
+        )
+
+        val broken = """
+            class GameSampleActivity : LvglGameActivity() {
+                private val tick = Runnable { onGameLoop(16L) }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectPerformanceSinkCaller(
+            featureMap(GuardRules.FEATURE_GAME_SAMPLE to broken)
+        )
+        assertTrue(
+            "Canary failed: a perf sink with no caller must be caught",
+            hits.any { "onFrameRendered()" in it.reason },
+        )
+    }
+
+    @Test
+    fun launcherReceiverWiringDetectorCatchesUnwiredCallbacks() {
+        val clean = """
+            abstract class LvglLauncherActivity {
+                private val packageFilter = IntentFilter().apply {
+                    addAction(Intent.ACTION_PACKAGE_ADDED)
+                    addAction(Intent.ACTION_PACKAGE_REMOVED)
+                    addAction(Intent.ACTION_PACKAGE_CHANGED)
+                }
+                private val packageReceiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        when (intent.action) {
+                            Intent.ACTION_PACKAGE_ADDED -> {
+                                onPackageAdded("pkg"); onAllAppsChanged()
+                            }
+                            Intent.ACTION_PACKAGE_REMOVED -> {
+                                onPackageRemoved("pkg"); onAllAppsChanged()
+                            }
+                            Intent.ACTION_PACKAGE_CHANGED -> {
+                                onPackageChanged("pkg"); onAllAppsChanged()
+                            }
+                        }
+                    }
+                }
+                override fun onStart() {
+                    super.onStart()
+                    registerReceiver(packageReceiver, packageFilter)
+                }
+                override fun onStop() {
+                    unregisterReceiver(packageReceiver)
+                    super.onStop()
+                }
+                abstract fun onPackageAdded(p: String)
+                abstract fun onPackageRemoved(p: String)
+                abstract fun onPackageChanged(p: String)
+                abstract fun onAllAppsChanged()
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: clean launcher receiver wiring must pass",
+            GuardRules.detectLauncherReceiverWiring(
+                featureMap(GuardRules.FEATURE_LAUNCHER to clean)
+            ).isEmpty(),
+        )
+
+        val broken = """
+            abstract class LvglLauncherActivity {
+                override fun onStart() { super.onStart() }
+                override fun onStop() { super.onStop() }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectLauncherReceiverWiring(
+            featureMap(GuardRules.FEATURE_LAUNCHER to broken)
+        )
+        listOf("onStart", "onStop", "ACTION_PACKAGE_ADDED", "onPackageAdded").forEach { part ->
+            assertTrue(
+                "Canary failed: detector must catch unwired launcher '$part'",
+                hits.any { part in it.reason },
+            )
+        }
+
+        val noUnregister = clean.replace(
+            "unregisterReceiver(packageReceiver)",
+            "/* no unregister */",
+        )
+        assertTrue(
+            "Canary failed: a receiver registered but never unregistered must be caught",
+            GuardRules.detectLauncherReceiverWiring(
+                featureMap(GuardRules.FEATURE_LAUNCHER to noUnregister)
+            ).any { "onStop must unregister" in it.reason },
+        )
+    }
+
+    @Test
+    fun accessibilityAnnouncementWiringDetectorCatchesLogOnlyStub() {
+        val helper = """
+            object LvglAccessibilityHelper {
+                fun announce(context: Context, text: String) {
+                    LvglScreenReader.announce(context, text)
+                }
+            }
+        """.trimIndent()
+        val reader = """
+            object LvglScreenReader {
+                fun announce(activity: Activity, text: String) {
+                    val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
+                    event.text.add(text)
+                    view.sendAccessibilityEventUnchecked(event)
+                }
+            }
+        """.trimIndent()
+        val clean = featureMap(
+            GuardRules.FEATURE_ACCESSIBILITY_HELPER to helper,
+            GuardRules.FEATURE_SCREEN_READER to reader,
+        )
+        assertTrue(
+            "Canary failed: clean accessibility announcements must pass",
+            GuardRules.detectAccessibilityAnnouncementWiring(clean).isEmpty(),
+        )
+
+        val logOnlyHelper = helper.replace(
+            "LvglScreenReader.announce(context, text)",
+            "Log.d(TAG, text)",
+        )
+        val helperHits = GuardRules.detectAccessibilityAnnouncementWiring(
+            clean + (GuardRules.FEATURE_ACCESSIBILITY_HELPER to logOnlyHelper)
+        )
+        assertTrue(
+            "Canary failed: a log-only announce() stub must be caught",
+            helperHits.any { "delegate to LvglScreenReader" in it.reason },
+        )
+
+        val logOnlyReader = reader
+            .replace("AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)", "Log.d(TAG, text)")
+            .replace("view.sendAccessibilityEventUnchecked(event)", "Log.d(TAG, event.toString())")
+        val readerHits = GuardRules.detectAccessibilityAnnouncementWiring(
+            clean + (GuardRules.FEATURE_SCREEN_READER to logOnlyReader)
+        )
+        assertTrue(
+            "Canary failed: a log-only screen reader must be caught",
+            readerHits.any { "real AccessibilityEvent" in it.reason },
+        )
+    }
+
+    @Test
+    fun cameraPermissionWiringDetectorCatchesOpenBeforeGrantCheck() {
+        val clean = """
+            class CameraSampleActivity {
+                private fun checkCameraPermission() {
+                    if (!permissionGranted()) {
+                        requestPermissions(arrayOf(Manifest.permission.CAMERA), 1)
+                    }
+                }
+                private fun openCurrentCamera() {
+                    if (!permissionGranted()) return
+                    preview.open(id)
+                }
+            }
+        """.trimIndent()
+        assertTrue(
+            "Canary failed: a guarded camera open must pass",
+            GuardRules.detectCameraPermissionWiring(
+                featureMap(GuardRules.FEATURE_CAMERA_SAMPLE to clean)
+            ).isEmpty(),
+        )
+
+        // The grant check exists elsewhere in the file but not before open():
+        // a whole-file contains() check would be a false green here.
+        val broken = """
+            class CameraSampleActivity {
+                private fun checkCameraPermission() {
+                    if (!permissionGranted()) {
+                        requestPermissions(arrayOf(Manifest.permission.CAMERA), 1)
+                    }
+                }
+                private fun openCurrentCamera() {
+                    preview.open(id)
+                }
+            }
+        """.trimIndent()
+        val hits = GuardRules.detectCameraPermissionWiring(
+            featureMap(GuardRules.FEATURE_CAMERA_SAMPLE to broken)
+        )
+        assertTrue(
+            "Canary failed: preview.open() without a grant check in its function must be caught",
+            hits.any { "grant-check before preview.open()" in it.reason },
+        )
+    }
+
+    @Test
+    fun uiEventBridgeDetectorCatchesNoOpBridge() {
+        val ui = """
+            void on_event() {
+                ui_emit_event(g_currentAppScreen, id, type, value);
+            }
+        """.trimIndent()
+        val port = """
+            void ui_emit_event(int screen_id, const char* node_id, const char* type, int value) {
+                if (!cb || !cb->event) return;
+                env->CallVoidMethod(ref, cb->event, screen_id, jid);
+            }
+        """.trimIndent()
+        val clean = featureMap(
+            GuardRules.FEATURE_UI_CPP to ui,
+            GuardRules.FEATURE_PORT_CPP to port,
+        )
+        assertTrue(
+            "Canary failed: a real JNI event bridge must pass",
+            GuardRules.detectUiEventBridgeWiring(clean).isEmpty(),
+        )
+
+        val noEmit = clean + (GuardRules.FEATURE_UI_CPP to "void on_event() { /* no bridge */ }")
+        assertTrue(
+            "Canary failed: a builder that never emits an event must be caught",
+            GuardRules.detectUiEventBridgeWiring(noEmit).any { "must emit node events" in it.reason },
+        )
+
+        val noOpPort = clean + (
+            GuardRules.FEATURE_PORT_CPP to
+                "void ui_emit_event(int screen_id, const char* node_id) { return; }"
+            )
+        assertTrue(
+            "Canary failed: a no-op ui_emit_event() definition must be caught",
+            GuardRules.detectUiEventBridgeWiring(noOpPort).any { "not be a no-op" in it.reason },
+        )
+    }
+
+    @Test
+    fun featureWiringDetectorsFailClosedOnMissingSources() {
+        val helperOnly = featureMap(
+            GuardRules.FEATURE_ACCESSIBILITY_HELPER to """
+                object LvglAccessibilityHelper {
+                    fun announce(context: Context, text: String) {
+                        LvglScreenReader.announce(context, text)
+                    }
+                }
+            """.trimIndent(),
+        )
+        val uiOnly = featureMap(
+            GuardRules.FEATURE_UI_CPP to "void f() { ui_emit_event(id, type, value); }",
+        )
+        listOf(
+            GuardRules.FEATURE_ACTIVITY to featureMap(),
+            GuardRules.FEATURE_INPUT_PROCESSOR to featureMap(),
+            GuardRules.FEATURE_GAME_SAMPLE to featureMap(),
+            GuardRules.FEATURE_LAUNCHER to featureMap(),
+            GuardRules.FEATURE_ACCESSIBILITY_HELPER to featureMap(),
+            GuardRules.FEATURE_SCREEN_READER to helperOnly,
+            GuardRules.FEATURE_CAMERA_SAMPLE to featureMap(),
+            GuardRules.FEATURE_UI_CPP to featureMap(),
+            GuardRules.FEATURE_PORT_CPP to uiOnly,
+        ).forEach { (key, companions) ->
+            val hits = GuardRules.detectUnwiredFeatures(companions + (key to "   "))
+            assertTrue(
+                "Canary failed: missing source ($key) must produce a fail-closed violation",
+                hits.any { it.file == key && "missing or blank" in it.reason },
+            )
+        }
+        assertTrue(
+            "Canary failed: an empty source map must make every detector fail closed",
+            GuardRules.detectUnwiredFeatures(emptyMap()).size >= 7,
+        )
+    }
+
+    @Test
+    fun aggregateFeatureWiringDetectorCallsEveryDetector() {
+        val clean = featureMap(
+            GuardRules.FEATURE_ACTIVITY to """
+                class LvglActivity {
+                    val multiWindowManager = MultiWindowManager(this)
+                    override fun onMultiWindowModeChanged(b: Boolean) {
+                        multiWindowManager.onMultiWindowModeChanged(b)
+                    }
+                    override fun onPictureInPictureModeChanged(b: Boolean) {
+                        multiWindowManager.onPictureInPictureModeChanged(b)
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_INPUT_PROCESSOR to """
+                class P {
+                    val recognizer = GestureRecognizer()
+                    fun f(frame: GestureFrame): Gestures? {
+                        val direct = recognizer.handle(frame)
+                        return direct ?: recognizer.consumeLastGesture()
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_GAME_SAMPLE to
+                "class GameSampleActivity { fun tick() { LvglPerformanceMonitor.onFrameRendered() } }",
+            GuardRules.FEATURE_LAUNCHER to """
+                abstract class LvglLauncherActivity {
+                    override fun onStart() { registerReceiver(packageReceiver, packageFilter) }
+                    override fun onStop() { unregisterReceiver(packageReceiver) }
+                    fun f() {
+                        Intent.ACTION_PACKAGE_ADDED
+                        Intent.ACTION_PACKAGE_REMOVED
+                        Intent.ACTION_PACKAGE_CHANGED
+                        onPackageAdded("p"); onPackageRemoved("p"); onPackageChanged("p"); onAllAppsChanged()
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_ACCESSIBILITY_HELPER to """
+                object LvglAccessibilityHelper {
+                    fun announce(context: Context, text: String) {
+                        LvglScreenReader.announce(context, text)
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_SCREEN_READER to """
+                object LvglScreenReader {
+                    fun announce(activity: Activity, text: String) {
+                        val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
+                        view.sendAccessibilityEventUnchecked(event)
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_CAMERA_SAMPLE to """
+                class CameraSampleActivity {
+                    fun f() { if (!permissionGranted()) requestPermissions(a, 1) }
+                    private fun openCurrentCamera() {
+                        if (!permissionGranted()) return
+                        preview.open(id)
+                    }
+                }
+            """.trimIndent(),
+            GuardRules.FEATURE_UI_CPP to "void f() { ui_emit_event(id, type, value); }",
+            GuardRules.FEATURE_PORT_CPP to """
+                void ui_emit_event(int screen_id) {
+                    if (!cb->event) return;
+                    env->CallVoidMethod(ref, cb->event, screen_id);
+                }
+            """.trimIndent(),
+        )
+        assertTrue(
+            "Canary failed: clean aggregate fixture must pass:\n" +
+                GuardRules.detectUnwiredFeatures(clean).joinToString("\n") { it.reason },
+            GuardRules.detectUnwiredFeatures(clean).isEmpty(),
         )
     }
 }

@@ -108,7 +108,7 @@ Update the native port code in `lvgl-android/src/main/cpp/lvgl_port.cpp` accordi
 | `LvglInputMethodService` | Base for keyboard apps |
 | `LvglLauncherActivity` | Base for launcher apps |
 | `LvglGameActivity` | Base for games |
-| `LvglCameraPreview` | Camera capture helper (frames processed locally; no on-screen preview) |
+| `LvglCameraPreview` | Camera2 helper with aspect-fitted live preview overlay |
 | `DpiManager` | DPI adaptation |
 | `MultiWindowManager` | Multiwindow support |
 | `LvglThemeBridge` | Theme sync between Material and LVGL |

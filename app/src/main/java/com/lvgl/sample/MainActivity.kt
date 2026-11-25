@@ -36,6 +36,7 @@ class MainActivity : LvglActivity() {
                 7 -> com.lvgl.sample.showcase.DemoShowcaseActivity::class.java
                 1000 -> AppDemoActivity::class.java
                 1001 -> LicensesActivity::class.java
+                1002 -> HybridSampleActivity::class.java
                 else -> null
             }
         }

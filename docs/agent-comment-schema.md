@@ -43,6 +43,19 @@ Rules:
 Unknown tags are a build failure. Dangling `@breadcrumb`/`@decision` references
 are a build failure. Unparsable `@machine-json` is a build failure.
 
+### Guard rule names (v1.2.0)
+
+`@guard-rule rule=NAME test=ClassName` names must match a detector registered in
+`GuardRules`. The integration wiring rules introduced for general-app adoption
+are all annotated `test=IntegrationGuardTest`:
+
+`wired-multiwindow-pip`, `wired-gesture-results`, `wired-performance-caller`,
+`wired-launcher-receiver`, `wired-accessibility-announcements`,
+`wired-camera-permission`, `wired-ui-event-bridge`.
+
+These verify call paths, not file presence. Changing one requires updating its
+canary in `GuardCanaryTest`; see [CONTRIBUTING.md](../CONTRIBUTING.md).
+
 ## Standard KDoc tags
 
 The parser also recognises the standard KDoc documentation tags so that API
@@ -81,7 +94,8 @@ fun initDisplay(owner: Any, surface: Surface, width: Int, height: Int, dpi: Int)
 ## Validation rules
 
 `MachineCommentValidationTest` scans `lvgl-android/src/{main,test}` and
-`app/src/main` for `.kt`, `.cpp` and `.h` files and enforces:
+`app/src/main` for `.kt`, `.cpp` and `.h` files (markdown documentation is not
+scanned) and enforces:
 
 1. Every annotation uses a known tag.
 2. Every `@breadcrumb BC-NNN` resolves to an entry in `agent-breadcrumbs.json`.

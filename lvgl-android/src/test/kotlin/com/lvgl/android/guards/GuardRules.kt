@@ -40,6 +40,13 @@ object GuardRules {
         "play-compliance",
         "dynamic-harness-crash-detection",
         "release-workflow",
+        "wired-multiwindow-pip",
+        "wired-gesture-results",
+        "wired-performance-caller",
+        "wired-launcher-receiver",
+        "wired-accessibility-announcements",
+        "wired-camera-permission",
+        "wired-ui-event-bridge",
     )
 
     data class Violation(
@@ -85,6 +92,13 @@ object GuardRules {
             if (IGNORED_LINE.containsMatchIn(line)) return@forEachIndexed
             STRING_LITERAL.findAll(line).forEach { m ->
                 val text = m.groupValues[1]
+                // Annotation arguments (@SuppressLint("MissingPermission")) are
+                // framework keys, not prose. Exclude only the literal that is
+                // inside the annotation, never the rest of the line: a
+                // user-visible literal following the annotation must still fail.
+                if (ANNOTATION_ARGUMENT.containsMatchIn(line.substring(0, m.range.first))) {
+                    return@forEach
+                }
                 if (isUserVisible(text)) {
                     out.add(
                         Violation(
@@ -489,8 +503,319 @@ object GuardRules {
         "Screen reader" to "accessibility/LvglScreenReader.kt",
     )
 
+    // ---- feature wiring guards ---------------------------------------------
+    //
+    // A file existing is not evidence that the feature works. These detectors
+    // read the CALL SITES, not just the class declarations, so an unwired
+    // feature fails the build instead of leaving a green guard (BC-037).
+
+    const val FEATURE_ACTIVITY = "LvglActivity.kt"
+    const val FEATURE_INPUT_PROCESSOR = "LvglInputProcessor.kt"
+    const val FEATURE_GAME_SAMPLE = "GameSampleActivity.kt"
+    const val FEATURE_LAUNCHER = "LvglLauncherActivity.kt"
+    const val FEATURE_ACCESSIBILITY_HELPER = "LvglAccessibilityHelper.kt"
+    const val FEATURE_SCREEN_READER = "LvglScreenReader.kt"
+    const val FEATURE_CAMERA_SAMPLE = "CameraSampleActivity.kt"
+    const val FEATURE_UI_CPP = "lvgl_ui.cpp"
+    const val FEATURE_PORT_CPP = "lvgl_port.cpp"
+
+    /** Logical source key -> repository-relative path. Shared by the production
+     *  guard and its canaries so the two cannot drift apart. */
+    val featureSourcePaths: Map<String, String> = mapOf(
+        FEATURE_ACTIVITY to "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt",
+        FEATURE_INPUT_PROCESSOR to "lvgl-android/src/main/java/com/lvgl/android/input/LvglInputProcessor.kt",
+        FEATURE_GAME_SAMPLE to "app/src/main/java/com/lvgl/sample/GameSampleActivity.kt",
+        FEATURE_LAUNCHER to "lvgl-android/src/main/java/com/lvgl/android/launcher/LvglLauncherActivity.kt",
+        // The helper lives in this file; the logical key names the component.
+        FEATURE_ACCESSIBILITY_HELPER to
+            "lvgl-android/src/main/java/com/lvgl/android/accessibility/LvglAccessibilityDelegate.kt",
+        FEATURE_SCREEN_READER to
+            "lvgl-android/src/main/java/com/lvgl/android/accessibility/LvglScreenReader.kt",
+        FEATURE_CAMERA_SAMPLE to "app/src/main/java/com/lvgl/sample/CameraSampleActivity.kt",
+        FEATURE_UI_CPP to "lvgl-android/src/main/cpp/lvgl_ui.cpp",
+        FEATURE_PORT_CPP to "lvgl-android/src/main/cpp/lvgl_port.cpp",
+    )
+
+    /** Run every feature-wiring detector over one source map. Missing sources
+     *  are violations, never silent skips, so a broken checkout fails closed. */
+    fun detectUnwiredFeatures(sources: Map<String, String>): List<Violation> =
+        detectMultiWindowWiring(sources) +
+            detectGestureResultWiring(sources) +
+            detectPerformanceSinkCaller(sources) +
+            detectLauncherReceiverWiring(sources) +
+            detectAccessibilityAnnouncementWiring(sources) +
+            detectCameraPermissionWiring(sources) +
+            detectUiEventBridgeWiring(sources)
+
+    /** The activity must override both lifecycle callbacks and forward them to
+     *  a MultiWindowManager it actually constructs. */
+    fun detectMultiWindowWiring(sources: Map<String, String>): List<Violation> {
+        val src = featureCode(sources, FEATURE_ACTIVITY) ?: return listOf(
+            missingFeatureSource(FEATURE_ACTIVITY, "multi-window / PiP wiring")
+        )
+        val out = mutableListOf<Violation>()
+        if (!MULTI_WINDOW_OVERRIDE.containsMatchIn(src)) {
+            out.add(violation(FEATURE_ACTIVITY, "LvglActivity must override onMultiWindowModeChanged"))
+        }
+        if (!PIP_OVERRIDE.containsMatchIn(src)) {
+            out.add(violation(FEATURE_ACTIVITY, "LvglActivity must override onPictureInPictureModeChanged"))
+        }
+        if (!MULTI_WINDOW_CONSTRUCT.containsMatchIn(src)) {
+            out.add(violation(FEATURE_ACTIVITY, "LvglActivity must construct a MultiWindowManager"))
+        }
+        if (!MULTI_WINDOW_FORWARD.containsMatchIn(src)) {
+            out.add(violation(FEATURE_ACTIVITY, "onMultiWindowModeChanged must forward to MultiWindowManager"))
+        }
+        if (!PIP_FORWARD.containsMatchIn(src)) {
+            out.add(violation(FEATURE_ACTIVITY, "onPictureInPictureModeChanged must forward to MultiWindowManager"))
+        }
+        return out
+    }
+
+    /** Tap and long press are returned directly by GestureRecognizer.handle();
+     *  only the queued gestures may come from consumeLastGesture(). Dropping the
+     *  direct result silently swallowed every tap (BC-033). */
+    fun detectGestureResultWiring(sources: Map<String, String>): List<Violation> {
+        val src = featureCode(sources, FEATURE_INPUT_PROCESSOR) ?: return listOf(
+            missingFeatureSource(FEATURE_INPUT_PROCESSOR, "gesture result wiring")
+        )
+        val out = mutableListOf<Violation>()
+        if (!GESTURE_RECOGNIZER_CREATED.containsMatchIn(src)) {
+            out.add(violation(FEATURE_INPUT_PROCESSOR, "input processor must create a GestureRecognizer"))
+        }
+        val direct = GESTURE_DIRECT_RESULT.find(src)
+        if (direct == null) {
+            out.add(
+                violation(
+                    FEATURE_INPUT_PROCESSOR,
+                    "must capture GestureRecognizer.handle(...)'s direct result"
+                )
+            )
+        } else if (!Regex("""return\s+${Regex.escape(direct.groupValues[1])}\s*\?:\s*""" +
+                """recognizer\.consumeLastGesture\s*\(""").containsMatchIn(src)
+        ) {
+            out.add(
+                violation(
+                    FEATURE_INPUT_PROCESSOR,
+                    "must return the direct handle() result (tap/long press) before " +
+                        "falling back to consumeLastGesture()"
+                )
+            )
+        }
+        return out
+    }
+
+    /** The performance sink is only useful when something calls it; the game
+     *  sample's frame loop is that caller. */
+    fun detectPerformanceSinkCaller(sources: Map<String, String>): List<Violation> {
+        val src = featureCode(sources, FEATURE_GAME_SAMPLE) ?: return listOf(
+            missingFeatureSource(FEATURE_GAME_SAMPLE, "performance monitor caller")
+        )
+        if (PERFORMANCE_FRAME_CALL.containsMatchIn(src)) return emptyList()
+        return listOf(
+            violation(
+                FEATURE_GAME_SAMPLE,
+                "GameSampleActivity must call LvglPerformanceMonitor.onFrameRendered()"
+            )
+        )
+    }
+
+    /** The launcher must register its package receiver on start, unregister it
+     *  on stop, listen for install/remove/change and dispatch all three app
+     *  callbacks from onReceive(). */
+    fun detectLauncherReceiverWiring(sources: Map<String, String>): List<Violation> {
+        val src = featureCode(sources, FEATURE_LAUNCHER) ?: return listOf(
+            missingFeatureSource(FEATURE_LAUNCHER, "package receiver wiring")
+        )
+        val out = mutableListOf<Violation>()
+        if (!LAUNCHER_REGISTER.containsMatchIn(src)) {
+            out.add(violation(FEATURE_LAUNCHER, "onStart must register the package receiver"))
+        }
+        if (!LAUNCHER_UNREGISTER.containsMatchIn(src)) {
+            out.add(violation(FEATURE_LAUNCHER, "onStop must unregister the package receiver"))
+        }
+        listOf("ACTION_PACKAGE_ADDED", "ACTION_PACKAGE_REMOVED", "ACTION_PACKAGE_CHANGED").forEach { action ->
+            if (!Regex("""Intent\.$action\b""").containsMatchIn(src)) {
+                out.add(violation(FEATURE_LAUNCHER, "package receiver must listen for Intent.$action"))
+            }
+        }
+        listOf("onPackageAdded", "onPackageRemoved", "onPackageChanged", "onAllAppsChanged").forEach { cb ->
+            if (!Regex("""\b$cb\s*\(""").containsMatchIn(src)) {
+                out.add(violation(FEATURE_LAUNCHER, "package receiver must dispatch the $cb callback"))
+            }
+        }
+        return out
+    }
+
+    /** Announcements must reach a real AccessibilityEvent through
+     *  LvglScreenReader; a Log.d() stub is not an announcement. */
+    fun detectAccessibilityAnnouncementWiring(sources: Map<String, String>): List<Violation> {
+        val helper = featureCode(sources, FEATURE_ACCESSIBILITY_HELPER) ?: return listOf(
+            missingFeatureSource(FEATURE_ACCESSIBILITY_HELPER, "accessibility announcements")
+        )
+        val reader = featureCode(sources, FEATURE_SCREEN_READER) ?: return listOf(
+            missingFeatureSource(FEATURE_SCREEN_READER, "accessibility announcements")
+        )
+        val out = mutableListOf<Violation>()
+        if (!Regex("""object\s+LvglAccessibilityHelper\b""").containsMatchIn(helper)) {
+            out.add(violation(FEATURE_ACCESSIBILITY_HELPER, "LvglAccessibilityHelper object is missing"))
+        }
+        val announce = ACCESSIBILITY_ANNOUNCE.find(helper)
+        if (announce == null) {
+            out.add(
+                violation(
+                    FEATURE_ACCESSIBILITY_HELPER,
+                    "helper must expose announce(context, text)"
+                )
+            )
+        } else if (!SCREEN_READER_DELEGATE.containsMatchIn(announce.value)) {
+            out.add(
+                violation(
+                    FEATURE_ACCESSIBILITY_HELPER,
+                    "announcements must delegate to LvglScreenReader, not just log"
+                )
+            )
+        }
+        if (!REAL_ACCESSIBILITY_EVENT.containsMatchIn(reader)) {
+            out.add(
+                violation(
+                    FEATURE_SCREEN_READER,
+                    "LvglScreenReader must post a real AccessibilityEvent, not just log"
+                )
+            )
+        }
+        return out
+    }
+
+    /** Opening a camera before the CAMERA grant is a SecurityException waiting
+     *  to happen. The guard must be in the same function and before preview.open. */
+    fun detectCameraPermissionWiring(sources: Map<String, String>): List<Violation> {
+        val src = featureCode(sources, FEATURE_CAMERA_SAMPLE) ?: return listOf(
+            missingFeatureSource(FEATURE_CAMERA_SAMPLE, "camera permission check")
+        )
+        val out = mutableListOf<Violation>()
+        val open = CAMERA_OPEN.find(src)
+        if (open == null) {
+            out.add(violation(FEATURE_CAMERA_SAMPLE, "camera sample must open the preview"))
+            return out
+        }
+        val functionStart = src.lastIndexOf("fun ", open.range.first)
+        val beforeOpen = if (functionStart >= 0) src.substring(functionStart, open.range.first) else src
+        val guard = CAMERA_GRANT_CHECK.find(beforeOpen)
+        if (guard == null) {
+            out.add(
+                violation(
+                    FEATURE_CAMERA_SAMPLE,
+                    "camera sample must grant-check before preview.open()"
+                )
+            )
+        } else {
+            val afterGuard = beforeOpen.substring(guard.range.first)
+            if (!Regex("""\bif\b""").containsMatchIn(beforeOpen) ||
+                !Regex("""\breturn\b""").containsMatchIn(afterGuard)
+            ) {
+                out.add(
+                    violation(
+                        FEATURE_CAMERA_SAMPLE,
+                        "the grant check must be an if (...) return guard before preview.open()"
+                    )
+                )
+            }
+        }
+        if (!CAMERA_REQUEST_PERMISSION.containsMatchIn(src)) {
+            out.add(violation(FEATURE_CAMERA_SAMPLE, "camera sample must request CAMERA when not granted"))
+        }
+        return out
+    }
+
+    /** Native UI node callbacks need a real JNI bridge: the builder emits via
+     *  ui_emit_event() and the port forwards it to the Kotlin listener. */
+    fun detectUiEventBridgeWiring(sources: Map<String, String>): List<Violation> {
+        val ui = featureCode(sources, FEATURE_UI_CPP) ?: return listOf(
+            missingFeatureSource(FEATURE_UI_CPP, "UI event bridge")
+        )
+        val port = featureCode(sources, FEATURE_PORT_CPP) ?: return listOf(
+            missingFeatureSource(FEATURE_PORT_CPP, "UI event bridge")
+        )
+        val out = mutableListOf<Violation>()
+        if (!UI_EMIT_CALL.containsMatchIn(ui)) {
+            out.add(
+                violation(
+                    FEATURE_UI_CPP,
+                    "lvgl_ui.cpp must emit node events through ui_emit_event()"
+                )
+            )
+        }
+        val definition = UI_EMIT_DEFINITION.find(port)
+        if (definition == null) {
+            out.add(violation(FEATURE_PORT_CPP, "lvgl_port.cpp must define ui_emit_event(...)"))
+        } else {
+            val body = port.substring(
+                definition.range.last,
+                minOf(port.length, definition.range.last + UI_EMIT_BODY_CHARS)
+            )
+            if (!JNI_EVENT_CALL.containsMatchIn(body) || !UI_EVENT_LISTENER.containsMatchIn(body)) {
+                out.add(
+                    violation(
+                        FEATURE_PORT_CPP,
+                        "ui_emit_event must forward events to the Kotlin listener, not be a no-op"
+                    )
+                )
+            }
+        }
+        return out
+    }
+
+    private fun featureCode(sources: Map<String, String>, key: String): String? =
+        sources[key]?.takeIf { it.isNotBlank() }?.let { SourceComments.stripComments(it) }
+
+    private fun missingFeatureSource(key: String, feature: String): Violation =
+        violation(key, "$feature source is missing or blank; cannot verify wiring")
+
+    private fun violation(file: String, reason: String): Violation =
+        Violation(file = file, line = 0, text = "", reason = reason)
+
+    private val MULTI_WINDOW_OVERRIDE =
+        Regex("""override\s+fun\s+onMultiWindowModeChanged\s*\(""")
+    private val PIP_OVERRIDE =
+        Regex("""override\s+fun\s+onPictureInPictureModeChanged\s*\(""")
+    private val MULTI_WINDOW_CONSTRUCT = Regex("""MultiWindowManager\s*\(""")
+    private val MULTI_WINDOW_FORWARD =
+        Regex("""multiWindowManager\.onMultiWindowModeChanged\s*\(""")
+    private val PIP_FORWARD =
+        Regex("""multiWindowManager\.onPictureInPictureModeChanged\s*\(""")
+    private val GESTURE_RECOGNIZER_CREATED = Regex("""GestureRecognizer\s*\(""")
+    private val GESTURE_DIRECT_RESULT =
+        Regex("""val\s+(\w+)\s*=\s*recognizer\.handle\s*\(""")
+    private val PERFORMANCE_FRAME_CALL =
+        Regex("""LvglPerformanceMonitor\.onFrameRendered\s*\(\s*\)""")
+    private val LAUNCHER_REGISTER = Regex(
+        """override\s+fun\s+onStart\s*\([^)]*\)[\s\S]{0,500}?registerReceiver\s*\(\s*packageReceiver"""
+    )
+    private val LAUNCHER_UNREGISTER = Regex(
+        """override\s+fun\s+onStop\s*\([^)]*\)[\s\S]{0,500}?unregisterReceiver\s*\(\s*packageReceiver"""
+    )
+    private val ACCESSIBILITY_ANNOUNCE = Regex(
+        """fun\s+announce\s*\([^)]*\)[\s\S]{0,300}?\}"""
+    )
+    private val SCREEN_READER_DELEGATE =
+        Regex("""LvglScreenReader\.announce\s*\(\s*context\s*,\s*text\s*\)""")
+    private val REAL_ACCESSIBILITY_EVENT = Regex(
+        """AccessibilityEvent\.obtain\s*\([\s\S]{0,400}?sendAccessibilityEventUnchecked\s*\("""
+    )
+    private val CAMERA_OPEN = Regex("""preview\.open\s*\(""")
+    private val CAMERA_GRANT_CHECK =
+        Regex("""permissionGranted\s*\(\s*\)|checkSelfPermission\s*\(""")
+    private val CAMERA_REQUEST_PERMISSION = Regex("""requestPermissions\s*\(""")
+    private val UI_EMIT_CALL = Regex("""\bui_emit_event\s*\(""")
+    private val UI_EMIT_DEFINITION = Regex("""void\s+ui_emit_event\s*\([^)]*\)\s*\{""")
+    private const val UI_EMIT_BODY_CHARS = 800
+    private val JNI_EVENT_CALL = Regex("""CallVoidMethod\s*\(""")
+    private val UI_EVENT_LISTENER = Regex("""cb->event\b""")
+
     private val SET_CONTENT_VIEW = Regex("""\bsetContentView\s*\(""")
     private val STRING_LITERAL = Regex(""""([^"]*?)"""")
+    private val ANNOTATION_ARGUMENT = Regex("""@\w+\s*\([^()]*$""")
     private val IGNORED_LINE = Regex(
         """(TAG =|Log\.|LvglNavigation\.pushScreen|\.java|::class|R\.string|""" +
             """\b(?:const\s+)?val\s+(?:ID|KEY|PREF)_[A-Z0-9_]*\s*=)"""

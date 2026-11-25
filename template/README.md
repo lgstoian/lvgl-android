@@ -84,12 +84,27 @@ NDK r26b and CMake 3.22.1 (needed to build the library's native code).
 
 ## After the library is published
 
-The dependency `com.lvgl.android:lvgl-android:1.1.0` is the same coordinate the
+The dependency `com.lvgl.android:lvgl-android:1.2.0` is the same coordinate the
 composite build substitutes locally. Once the library is published to a Maven
 repository, add that repository to `dependencyResolutionManagement` and remove
 the `includeBuild` block — the app keeps building unchanged.
+
+## Mixing LVGL with a normal Android app
+
+The template's `MainActivity` is an `LvglActivity` (a whole LVGL screen). If
+your app is mostly Compose/XML, you do not have to change that: add an
+`LvglSurfaceView` to a plain Activity/Fragment layout or a Compose
+`AndroidView` for just one feature, and keep your existing navigation. Native
+Android views can also be composited above the LVGL surface — the sample's
+camera preview is the working proof. See [docs/interop.md](../docs/interop.md).
+
+Adopting or exiting is incremental; see [docs/migration.md](../docs/migration.md).
+TalkBack coverage is limited to `LvglUi` app screens — see
+[docs/accessibility.md](../docs/accessibility.md) before committing a whole
+screen to LVGL.
 
 ## Next steps
 
 - [Quickstart](../docs/quickstart.md) — your first screen, input, theme, build.
 - [Public API reference](../docs/public-api.md) — every class in `com.lvgl.android`.
+- [Support policy](../SUPPORT.md) and [security reporting](../SECURITY.md).

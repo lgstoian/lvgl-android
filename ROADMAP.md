@@ -1,7 +1,7 @@
 # LVGL Android Framework — Development Roadmap
 
-> Last updated: 2026-11-24
-> Current Phase: Phase 24 — Gate integrity and shipping verification
+> Last updated: 2026-11-25
+> Current Phase: Phase 25 — General Android adoption, interop and governance
 
 ## Overview
 
@@ -234,6 +234,35 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
   shrinking make `bundleRelease` fail; per-ABI APKs still come from
   `assembleRelease`. [BC-037]
 
+### Phase 25: General Android adoption, interop and governance ✅
+
+- **Positioning**: README now states why and when to use the framework for a
+  general Android app, with an honest trade-off table and pointers to interop
+  and escape hatches. It is no longer presented as embedded-only.
+- **Camera interop**: `LvglCameraPreview.selectPreviewSize(cameraId, target)`
+  and `chosenPreviewSize` fit the Camera2 preview to the closest available
+  YUV_420_888 aspect ratio; the native overlay is letterboxed/centred instead
+  of stretched. `allCameraIds()` enumerates logical and physical sensors and
+  the sample cycles cameras on tap.
+- **Integration guards**: `IntegrationGuardTest` adds seven fail-closed wiring
+  detectors (multiwindow/PiP, gesture results, performance sink, launcher
+  receiver, accessibility announcements, camera permission, UI event bridge)
+  with canaries. Presence of code is no longer treated as evidence that a
+  feature is wired. [BC-037]
+- **Hybrid sample**: `HybridSampleActivity` (`com.lvgl.sample`, not exported)
+  mixes `LvglSurfaceView` with native Android views and demonstrates both
+  directions of the bridge — native buttons → LVGL screen/text and LVGL node
+  events → native `TextView` via `LvglUi.listener` on the UI thread.
+- **Accessibility bridge**: `LvglSurfaceView.getAccessibilityNodeProvider()`
+  returns an internal node provider that mirrors `LvglUi` app screens
+  (ids ≥ 1000) as virtual nodes for TalkBack, with actions pushed back through
+  `LvglUi.updateNode()`. Scope and the native-view fallback are documented.
+- **Docs and governance**: new `docs/interop.md`, `docs/accessibility.md`,
+  `docs/performance.md`, `docs/migration.md`, `SECURITY.md` and `SUPPORT.md`;
+  CONTRIBUTING, release checklist, API/quickstart and README updated;
+  `1.2.0` released on 2026-11-25 (versionCode 3) with signed artifacts. Play
+  Console forms and the store listing remain a manual user step.
+
 ---
 
 ## Progress Tracking
@@ -264,6 +293,7 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 | Phase 22: Showcase Window Layout & Launcher Grid | ✅ Complete | 2026-11-04 | 2026-11-04 |
 | Phase 23: Google Play Compatibility | ✅ Complete | 2026-11-04 | 2026-11-04 |
 | Phase 24: Gate Integrity and Shipping Verification | ✅ Complete | 2026-11-24 | 2026-11-24 |
+| Phase 25: General Android Adoption, Interop and Governance | ✅ Complete | 2026-11-25 | 2026-11-25 |
 
 ## Architecture Decision Records
 
@@ -443,6 +473,34 @@ detector with canaries (including wiring canaries), align the toolchain with API
 components, and smoke-test the actual release artifact in CI before the release
 workflow proceeds. See `BC-037`.
 
+### ADR-019: Interop and escape hatches are part of the framework
+
+**Status**: Accepted
+
+**Context**: LVGL renders into its own `SurfaceView`. An app that needs
+platform widgets, TalkBack semantics, a camera preview or Compose navigation
+must be able to use them without abandoning LVGL everywhere.
+
+**Decision**: `LvglSurfaceView` is usable as a normal view in an Activity,
+Fragment or Compose `AndroidView`; native views can be composited above it with
+their own overlay flags (the camera preview is the proof); and a screen can be
+moved back to Compose/XML incrementally. `HybridSampleActivity` demonstrates
+both directions of the bridge. Documented in `docs/interop.md` and
+`docs/migration.md`.
+
+### ADR-020: Accessibility node bridge with an explicit boundary
+
+**Status**: Accepted
+
+**Context**: An LVGL canvas has no Android view hierarchy, so TalkBack cannot
+see its widgets. Announcements alone are not enough for exploration.
+
+**Decision**: Expose an `AccessibilityNodeProvider` on `LvglSurfaceView` that
+mirrors `LvglUi` app screens (ids ≥ 1000) as virtual nodes with actions pushed
+back through `LvglUi.updateNode()`. Built-in screens, exact geometry and native
+text/scroll semantics are explicitly out of scope; those screens use a native
+view fallback. Documented in `docs/accessibility.md`.
+
 ## Change Log
 
 - **2026-10-16**: Roadmap created. Phases 1-8 marked complete.
@@ -471,3 +529,7 @@ workflow proceeds. See `BC-037`.
 - **2026-11-24**: Phase 24 — fail-closed gates and wiring canaries, AGP/Gradle
   alignment for API 36, release-APK smoke with ABI presence and runtime JNI init,
   and an audit of the shipped manifest (BC-037).
+- **2026-11-25**: Phase 25 — general Android positioning with honest trade-offs,
+  camera preview aspect fitting and camera cycling, integration wiring guards,
+  the hybrid interop sample, the TalkBack node-provider bridge and the new
+  adoption/docs/governance set (ADR-019/020). Shipped as v1.2.0 (versionCode 3).

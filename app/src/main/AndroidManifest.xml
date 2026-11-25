@@ -63,6 +63,10 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
         <activity android:name=".LicensesActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
+        <!-- Hybrid interop: a plain AppCompatActivity hosting native Android
+             views alongside an LvglSurfaceView. Internal-only, so not exported. -->
+        <activity android:name=".HybridSampleActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density" />
 
         <!-- Sample LVGL keyboard. BIND_INPUT_METHOD is a platform signature
              permission enforced on this service by Android; it is not an app

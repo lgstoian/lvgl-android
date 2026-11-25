@@ -12,6 +12,9 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
+import android.view.accessibility.AccessibilityNodeProvider
+import com.lvgl.android.accessibility.LvglNodeAccessibilityProvider
 import com.lvgl.android.engine.LvglEngine
 
 /**
@@ -30,6 +33,9 @@ open class LvglSurfaceView @JvmOverloads constructor(
     private val engine = LvglEngine.instance
     private var nativeInitialized = false
 
+    /** Mirrors registered Kotlin UI-builder nodes as virtual TalkBack views. */
+    private val accessibilityProvider = LvglNodeAccessibilityProvider(context, this)
+
     init {
         holder.addCallback(this)
         holder.setFormat(PixelFormat.RGBA_8888)
@@ -38,7 +44,15 @@ open class LvglSurfaceView @JvmOverloads constructor(
          * dialogs behind the LVGL surface and contributes to the ANR). */
         setZOrderMediaOverlay(false)
         setZOrderOnTop(false)
+        /* Without these the host is skipped by accessibility services and the
+         * node provider is never consulted. */
+        isFocusable = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        accessibilityProvider.attach()
     }
+
+    /** Virtual accessibility children of this surface; see [LvglNodeAccessibilityProvider]. */
+    override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider? = accessibilityProvider
 
     /** Called when the surface is created; initialises the process-wide engine. */
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -59,6 +73,7 @@ open class LvglSurfaceView @JvmOverloads constructor(
          * size is unchanged, and only rebuilds on a genuine size change. */
         engine.initDisplay(this, holder.surface, width, height, dpi)
         nativeInitialized = true
+        accessibilityProvider.refresh()
     }
 
     /** Unbinds the display when the surface goes away; the engine stays alive. */
@@ -103,6 +118,7 @@ open class LvglSurfaceView @JvmOverloads constructor(
      */
     fun onResume() {
         if (nativeInitialized) { engine.resume() }
+        accessibilityProvider.refresh()
     }
 
     /**
@@ -127,6 +143,7 @@ open class LvglSurfaceView @JvmOverloads constructor(
             engine.deinitDisplay(this)
             nativeInitialized = false
         }
+        accessibilityProvider.detach()
         /* The engine itself is process-wide and intentionally not destroyed
          * here — the display is only unbound, so a later activity can rebind. */
     }

@@ -4,13 +4,40 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LVGL v9.6.0](https://img.shields.io/badge/LVGL-v9.6.0-blue.svg)](https://github.com/lvgl/lvgl)
 
-A framework for building small, efficient Android applications using [LVGL (Light and Versatile Graphics Library)](https://lvgl.io/) v9.6.0.
+A framework for building small, efficient Android applications using [LVGL (Light and Versatile Graphics Library)](https://lvgl.io/) v9.6.0 — as one surface inside a normal Android app, or as the UI for a whole app.
 
 ## Overview
 
-This project transforms LVGL — a lightweight embedded GUI library — into a full Android framework. The framework provides Kotlin-first APIs for building Android apps with custom UI, including activities, input methods (keyboards), launchers, games, and apps with camera integration.
+This project turns LVGL into a **general Android UI framework** with Kotlin-first APIs: activities, input methods (keyboards), launchers, games and camera integration. LVGL renders into an Android `SurfaceView` through native C++/JNI, with a Material 3 component kit and a Kotlin DSL for declaring screens. It is an additional rendering path on Android — not an embedded-only toolkit, and not a wholesale replacement for Compose or XML.
 
-LVGL renders directly to an Android `SurfaceView` via native C code using JNI, providing a fully customizable UI without relying on Android's native widget system.
+A typical app keeps its normal Android architecture and uses this framework for the screens where a custom, shared C++ UI pays off: dashboards, games, launchers, custom visualizations. The sample app shows full-LVGL activities; `HybridSampleActivity` shows an `LvglSurfaceView` living beside native Android views in one layout.
+
+## Why / when to use this
+
+**Reach for it when:**
+
+- You want one widget/animation codebase shared with other LVGL targets, or a compact native renderer for a game, launcher or dashboard.
+- You need a custom-drawn UI that would be awkward to express with platform widgets, while still using Android APIs for permissions, camera, system services and lifecycle.
+- You are migrating an existing C++/LVGL UI to Android and want to keep it while adopting native screens incrementally.
+- You want a small release artifact: the sample is ~1.3 MB per ABI after R8, resource shrinking, per-ABI splits and the static C++ STL.
+
+**Do not use it when:**
+
+- Your app is mostly forms, long text, lists and settings — Compose/XML will be faster to build and better integrated.
+- You need full platform accessibility semantics, native text fields/IME, platform widgets, maps, ads or in-app billing UI out of the box.
+- You require platform-consistent behaviour and frame scheduling from the Android UI toolkit (see [performance caveats](docs/performance.md)).
+
+### Honest trade-offs
+
+| Area | What you gain | What you give up |
+| --- | --- | --- |
+| Ecosystem | One LVGL codebase across targets; small native artifact | Most AndroidX/Compose libraries, platform widgets and Material components are not available inside LVGL |
+| Accessibility | TalkBack virtual nodes for `LvglUi` app screens (ids ≥ 1000) via an accessibility node provider; announcement path for code | Built-in screens and exact widget geometry are not exposed; native text/scroll semantics are absent ([details](docs/accessibility.md)) |
+| Rendering | Full control over pixels, animations and theme | A custom render thread that is not phase-locked to platform vsync; measurements must be taken on real hardware ([details](docs/performance.md)) |
+| Integration | Activities, IME, launchers, games, camera overlays, multiwindow/PiP/foldables | Native UI work must be bridged explicitly; callbacks land on the LVGL thread and must hop to the UI thread |
+| Maintenance | Small, self-contained C++ core; pinned LVGL submodule | A small, community-maintained project: no commercial support or response SLA ([SUPPORT.md](SUPPORT.md), [SECURITY.md](SECURITY.md)) |
+
+**Escape hatches:** you can embed `LvglSurfaceView` in a plain Activity, Fragment or Compose `AndroidView`; host native Android views **above** LVGL (the camera preview is the shipped proof); and move any screen back to Compose/XML one at a time. Start with [docs/interop.md](docs/interop.md) and [docs/migration.md](docs/migration.md) — adopting this framework does not require committing the whole app to it.
 
 **Key Features:**
 - LVGL v9.6.0 as a Git submodule for easy version updates
@@ -24,7 +51,7 @@ LVGL renders directly to an Android `SurfaceView` via native C code using JNI, p
 - Input Method Service (keyboard) support
 - Launcher/home screen support
 - Game-optimized activity with vsync
-- Camera capture helper (frames processed locally; no on-screen preview)
+- Camera2 helper with aspect-ratio-fit preview size selection, logical/physical camera enumeration and tap-to-cycle; the sample composites a native preview surface above LVGL
 - R/B pixel swap for correct RGBA rendering
 - Dedicated LVGL render thread (vsync-aware, honours LVGL's requested period)
 - Touch input with pointer gestures
@@ -33,6 +60,9 @@ LVGL renders directly to an Android `SurfaceView` via native C code using JNI, p
   panels and a shared status bar (immersive)
 - App Demo: a complete screen declared in Kotlin with the `LvglUi` DSL, plus a
   playable tap-the-target game demo
+- Hybrid interop sample: `HybridSampleActivity` mixes `LvglSurfaceView` with native Android views and bridges both directions
+- Accessibility node-provider bridge: TalkBack virtual nodes for `LvglUi` app screens (ids ≥ 1000), with a documented native-view fallback
+- Fail-closed integration guards that verify features are actually wired (call paths), not just present in source
 - Beautiful-by-default UI system: design tokens, a screen scaffold, overlap-proof
   layout primitives, text auto-fit and a layout lint with CI reporting
 - Developer toolkit: quickstart, public API reference, copyable `template/`, a
@@ -80,7 +110,7 @@ android_lvgl/
 │   └── build.gradle.kts
 ├── build-logic/                # Included Gradle build: com.lvgl.android.app plugin
 ├── template/                   # Copyable standalone app project (composite build)
-├── docs/                       # Quickstart, public API, breadcrumb trail, schema
+├── docs/                       # Quickstart, API, interop, accessibility, performance, migration, breadcrumb trail
 ├── lvgl-android/api/           # Binary-compatibility API dump (apiCheck)
 ├── tools/                      # Dynamic (emulator) harness + size report
 ├── screenshots/                # Screenshots for documentation
@@ -124,7 +154,8 @@ APK: `app/build/outputs/apk/debug/app-universal-debug.apk`
 
 ## Demos
 
-Screenshots refreshed from the v1.1.0 build (2026-11-24).
+Screenshots from the v1.1.0 build (2026-11-24); the v1.2.0 UI adds the hybrid
+and camera-preview interop demonstrations described in [docs/interop.md](docs/interop.md).
 
 | Device dashboard | Widget showcase |
 | --- | --- |
@@ -302,6 +333,19 @@ New screens are consistent and correctly aligned without hand-tuning:
   overlapping siblings, out-of-bounds children and clipped text; the dynamic
   harness fails CI when any warning appears.
 
+### Interop and accessibility
+
+- `LvglSurfaceView` is a normal `SurfaceView`: it can be placed in a plain
+  Activity/Fragment layout or a Compose `AndroidView`. One display is live at
+  a time; the engine rebinds the surface across activity transitions.
+- Native Android views are composited **above** the LVGL surface by giving
+  them their own overlay flags; `CameraSampleActivity` is the working proof and
+  `HybridSampleActivity` shows native controls around an LVGL surface.
+- `LvglSurfaceView` exposes an `AccessibilityNodeProvider` backed by the
+  `LvglUi` tree for app screens (ids ≥ 1000). See
+  [docs/accessibility.md](docs/accessibility.md) for the exact coverage and the
+  native-view fallback.
+
 ## Updating LVGL Version
 
 LVGL is a Git submodule:
@@ -323,9 +367,14 @@ After updating, check for:
 ## Documentation
 
 - [AGENTS.md](AGENTS.md) — Development guide and troubleshooting (read before coding)
+- [CONTRIBUTING.md](CONTRIBUTING.md) — PR process, CI and guard rules
 - [ai-context.md](ai-context.md) — Known issues, quirks, and fixes
 - [docs/quickstart.md](docs/quickstart.md) — Your first LVGL Android app in 5 minutes
 - [docs/public-api.md](docs/public-api.md) — Public API reference
+- [docs/interop.md](docs/interop.md) — LVGL inside a normal Android app; native views above LVGL; escape hatches
+- [docs/accessibility.md](docs/accessibility.md) — What TalkBack can and cannot see; native fallback
+- [docs/performance.md](docs/performance.md) — Measuring with `LvglPerformanceMonitor`; render-thread caveats
+- [docs/migration.md](docs/migration.md) — Adopting from Compose/XML and exiting back
 - [template/README.md](template/README.md) — Copyable app template
 - [build-logic/README.md](build-logic/README.md) — `com.lvgl.android.app` scaffolding plugin
 - [docs/agent-comment-schema.md](docs/agent-comment-schema.md) — Machine-readable comment schema
@@ -333,7 +382,10 @@ After updating, check for:
 - [BUILDING.md](BUILDING.md) — Quick start guide
 - [ROADMAP.md](ROADMAP.md) — Development roadmap and progress
 - [CHANGELOG.md](CHANGELOG.md) — Release notes
+- [docs/release-checklist.md](docs/release-checklist.md) — Release verification checklist
 - [PRIVACY.md](PRIVACY.md) — Privacy policy (no personal data collected)
+- [SECURITY.md](SECURITY.md) — Vulnerability reporting and supported versions
+- [SUPPORT.md](SUPPORT.md) — Support policy and version matrix
 - [docs/play-store.md](docs/play-store.md) — Google Play readiness checklist
 
 ## License

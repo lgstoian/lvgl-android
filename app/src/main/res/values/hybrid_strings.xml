@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hybrid interop sample: native Android views + LVGL in one Activity.
+         All user-visible strings for HybridSampleActivity live here. -->
+
+    <string name="hybrid_title">Hybrid interop - native Android header</string>
+    <string name="hybrid_native_controls">Native controls - Android to LVGL</string>
+    <string name="hybrid_native_status_hint">Last LVGL event appears here</string>
+    <string name="hybrid_send_to_lvgl">Send to LVGL</string>
+    <string name="hybrid_switch_screen">Switch LVGL screen</string>
+    <string name="hybrid_status_from_android">Hello from Android (%1$d)</string>
+
+    <string name="hybrid_screen_intro_title">Hybrid intro</string>
+    <string name="hybrid_screen_controls_title">Hybrid controls</string>
+    <string name="hybrid_intro_heading">Rendered by LVGL</string>
+    <string name="hybrid_intro_body">This screen is declared with LvglUi and shares the display with the native views above and below it.</string>
+    <string name="hybrid_status_initial">Waiting for Android...</string>
+    <string name="hybrid_lvgl_tap">Tap me - LVGL to Android</string>
+
+    <string name="hybrid_controls_heading">LVGL controls</string>
+    <string name="hybrid_controls_body">Toggle the switch or tap the button; the native TextView below updates through LvglUi.listener.</string>
+    <string name="hybrid_lvgl_toggle">LVGL switch</string>
+    <string name="hybrid_lvgl_reset">Reset - LVGL to Android</string>
+
+    <string name="hybrid_event_tap">LVGL button tapped</string>
+    <string name="hybrid_event_reset">LVGL requested a reset</string>
+    <string name="hybrid_event_toggle">LVGL switch is now %1$s</string>
+    <string name="hybrid_toggle_on">on</string>
+    <string name="hybrid_toggle_off">off</string>
+    <string name="hybrid_screen_switched">Now showing: %1$s</string>
+</resources>

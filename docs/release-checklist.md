@@ -1,16 +1,17 @@
-# Release checklist — v1.1.0
+# Release checklist — v1.2.0
 
-Use this before tagging `v1.1.0`. Every item is verifiable with a command.
+Use this before tagging `v1.2.0` (2026-11-25). Every project-side item is
+verifiable with a command; Play Console work is a manual user step (see below).
 
 ## Version
 
-- [ ] `gradle.properties`: `lvgl.versionCode=2` and `lvgl.versionName=1.1.0`
+- [ ] `gradle.properties`: `lvgl.versionCode=3` and `lvgl.versionName=1.2.0`
       (single source of truth; both modules read them).
       ```powershell
-      pwsh tools/bump-version.ps1 -Version 1.1.0 -VersionCode 2   # macOS/Linux
-      powershell -File tools\bump-version.ps1 -Version 1.1.0 -VersionCode 2   # Windows
+      pwsh tools/bump-version.ps1 -Version 1.2.0 -VersionCode 3   # macOS/Linux
+      powershell -File tools\bump-version.ps1 -Version 1.2.0 -VersionCode 3   # Windows
       ```
-- [ ] `CHANGELOG.md`: the `[1.1.0] - 2026-11-24` section is filled in and dated.
+- [ ] `CHANGELOG.md`: the `[1.2.0] - 2026-11-25` section is filled in and dated.
 
 ## API
 
@@ -35,6 +36,17 @@ Use this before tagging `v1.1.0`. Every item is verifiable with a command.
 
 - [ ] Unit, guard and plugin tests pass:
       `.\gradlew.bat :lvgl-android:testDebugUnitTest :app:testDebugUnitTest :build-logic:test`
+- [ ] Integration wiring guards pass: `IntegrationGuardTest` and the
+      `GuardCanaryTest` canaries for the seven wiring detectors
+      (multiwindow/PiP, gestures, performance sink, launcher receiver,
+      accessibility announcements, camera permission, UI event bridge). [BC-037]
+- [ ] Hybrid sample builds and is reachable: `HybridSampleActivity` is
+      `exported="false"` and mixes `LvglSurfaceView` with native views.
+- [ ] Camera preview is aspect-fitted (`selectPreviewSize` / `chosenPreviewSize`)
+      and tap-to-cycle enumerates logical and physical camera ids.
+- [ ] Accessibility node provider is exercised on a device/emulator for an
+      `LvglUi` app screen (id ≥ 1000); scope and fallback match
+      `docs/accessibility.md`.
 - [ ] Dynamic test passes and the layout lint is clean:
       `powershell -File tools\dynamic-test.ps1`
 - [ ] Release APK smoke passes (CI and the release workflow block publishing on
@@ -52,9 +64,16 @@ Use this before tagging `v1.1.0`. Every item is verifiable with a command.
       # Replace <build-tools-version> with an installed build-tools version.
       & "$env:ANDROID_HOME\build-tools\<build-tools-version>\aapt2.exe" dump xmltree --file AndroidManifest.xml app\build\outputs\apk\release\app-universal-release.apk
       ```
-- [ ] Tag `v<version>` is pushed and the release workflow runs green.
+- [ ] Tag `v1.2.0` is pushed and the release workflow runs green with signed
+      artifacts.
 - [ ] The GitHub release contains the per-ABI APKs, the AAB and `SHA256SUMS.txt`.
-- [ ] Release notes describe the highlights.
+- [ ] Release notes describe the highlights and point at the new adoption docs.
+- [ ] Governance is current: `SECURITY.md`, `SUPPORT.md`, `CONTRIBUTING.md`,
+      `docs/interop.md`, `docs/accessibility.md`, `docs/performance.md` and
+      `docs/migration.md` reflect the shipped behaviour.
+- [ ] **Manual user step (not a CI gate)**: Play Console data-safety form,
+      store listing, screenshots, privacy-policy URL and rollout — see
+      [play-store.md](play-store.md).
 
 ## Signing secrets
 
