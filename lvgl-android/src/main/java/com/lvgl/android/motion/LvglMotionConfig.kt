@@ -18,10 +18,10 @@ import android.view.ViewConfiguration
 import android.view.animation.AnimationUtils
 import android.view.animation.Interpolator
 import com.lvgl.android.engine.LvglEngine
-import kotlin.math.PI
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * ROM-adaptive motion snapshot.
@@ -114,14 +114,21 @@ data class LvglMotionConfig(
 
     /** INFO log of the values actually applied to LVGL (hardware verification). */
     fun logApplied() {
+        /* `configured` is ROM duration x scale; `expected2%` is the modelled
+         * 2% settle time of the spring sent over JNI. They must agree within a
+         * frame — compare these numbers on real hardware. */
+        fun springLog(name: String, spring: Spring, durationMs: Int, scale: Float) =
+            "$name=${spring.stiffness}/${spring.damping} " +
+                "configured=${durationMs}ms*${scale}=${durationMs * scale}ms " +
+                "expected2%=${spring.settleMs}ms"
         Log.i(
             TAG,
             "LVGL motion: scrollThrow=${scrollThrow}% scrollLimit=${scrollLimit} " +
                 "gestureMinVelocity=$gestureMinVelocity decay=$decay zeta=$zeta " +
                 "frameInterval=${frameIntervalMs}ms " +
-                "shortSpring=${shortSpring.stiffness}/${shortSpring.damping}@${shortSpring.settleMs}ms " +
-                "mediumSpring=${mediumSpring.stiffness}/${mediumSpring.damping}@${mediumSpring.settleMs}ms " +
-                "longSpring=${longSpring.stiffness}/${longSpring.damping}@${longSpring.settleMs}ms"
+                "${springLog("shortSpring", shortSpring, shortAnimMs, animatorScale)} " +
+                "${springLog("mediumSpring", mediumSpring, mediumAnimMs, transitionScale)} " +
+                "${springLog("longSpring", longSpring, longAnimMs, windowScale)}"
         )
     }
 
@@ -180,8 +187,22 @@ data class LvglMotionConfig(
         const val MAX_SCROLL_LIMIT = 255
         const val MIN_VELOCITY = 1
         const val MAX_VELOCITY = 255
+        /* Legacy constant, kept for binary compatibility with the wire dump.
+         * The 0.6 heuristic is superseded by [settleFactorFromZeta]: it made an
+         * underdamped spring settle in ~0.5x the ROM duration and overshoot. */
         const val SPRING_DURATION_FACTOR = 0.6f
         const val MIN_SPRING_MS = 40f
+
+        /* Android's fast_out_slow_in is monotonic (no bounce). Represent it as
+         * a near-critically damped oscillator, never as an underdamped one.
+         * The band is clamped away from zeta = 1 so the 2% envelope formula
+         * below stays finite; 0.98 already has no visible overshoot. */
+        private const val MIN_ZETA = 0.90f
+        private const val MAX_ZETA = 0.98f
+        private const val AOSP_FAST_OUT_SLOW_IN_ZETA = 0.95f
+        private const val ZETA_MID_SLOPE = 0.20f
+        private const val SETTLE_TOLERANCE = 0.02f
+        private const val CRITICAL_SETTLE_FACTOR = 5.83f
 
         private fun safeRefresh(hz: Float): Float =
             if (hz.isFinite() && hz > 0f) hz.coerceIn(MIN_REFRESH_HZ, MAX_REFRESH_HZ)
@@ -243,35 +264,53 @@ data class LvglMotionConfig(
         }
 
         /**
-         * Map the system interpolator's midpoint to a damping ratio. A linear
-         * ROM (mid=0.5) is critically damped; a strongly eased Material curve
-         * (mid≈0.72) is slightly underdamped so widgets have a tactile settle.
+         * Map the ROM interpolator's midpoint to a near-critical damping ratio.
+         * `fast_out_slow_in` decelerates monotonically, so a spring that stands
+         * in for it must not overshoot: AOSP's mid (0.72) maps to 0.95, a more
+         * strongly eased ROM (e.g. 0.775) maps slightly closer to critical, and
+         * even a linear ROM stays above 0.90. The old `1.5 - mid` mapping gave
+         * the Nubia ROM zeta≈0.725, which bounced and settled too slowly.
          */
         fun zetaFromInterpolator(mid: Float): Float {
             val m = if (mid.isFinite()) mid else FALLBACK_FAST_OUT_SLOW_IN_MID
-            return (1.5f - m).coerceIn(0.45f, 1.0f)
+            val anchored = m.coerceIn(0.05f, 0.95f)
+            val z = AOSP_FAST_OUT_SLOW_IN_ZETA +
+                (anchored - FALLBACK_FAST_OUT_SLOW_IN_MID) * ZETA_MID_SLOPE
+            return z.coerceIn(MIN_ZETA, MAX_ZETA)
+        }
+
+        /**
+         * Number of natural-frequency time constants needed for a 2% settle.
+         * For a step response the error envelope is
+         * `e^(-zeta*omega*t) / sqrt(1 - zeta^2)`; requiring it to be <= [SETTLE_TOLERANCE]
+         * gives `omega*t = ln(1 / (tol * sqrt(1 - z^2))) / z`. At zeta -> 1 the
+         * critical response `(1 + x) * e^(-x)` needs x = 5.83; zeta is clamped
+         * to 0.98 so the envelope form stays finite. This is a conservative
+         * bound: the actual last 2% crossing is at or before this time.
+         */
+        private fun settleFactorFromZeta(zeta: Float): Float {
+            val z = zeta.coerceIn(MIN_ZETA, MAX_ZETA).toDouble()
+            val envelope = ln(1.0 / (SETTLE_TOLERANCE.toDouble() * sqrt(1.0 - z * z))) / z
+            return envelope.coerceAtMost(CRITICAL_SETTLE_FACTOR.toDouble()).toFloat()
         }
 
         /**
          * Convert an Android duration (ms) + animation scale + damping ratio to
-         * the same damped-oscillator parameters used by lvgl_anim. The 0.6
-         * factor matches SpringConfig::from_bounce_duration in native code.
+         * the damped-oscillator parameters used by lvgl_anim. `omega` is chosen
+         * so the guaranteed 2% settle time equals the polled ROM duration:
+         * `zeta * omega = settleFactor(zeta) / settleSeconds`. No extra 0.6
+         * shortening, so the wall-clock timing matches Android exactly.
          */
         fun springFromDuration(durationMs: Int, scale: Float, zeta: Float): Spring {
             val safeMs = if (durationMs > 0) durationMs.toFloat() else FALLBACK_MEDIUM_ANIM_MS.toFloat()
             val safeScale = if (scale > 0f && scale.isFinite()) scale else FALLBACK_ANIMATION_SCALE
             val settleMs = (safeMs * safeScale).coerceAtLeast(MIN_SPRING_MS)
-            val omega = (2.0 * PI / (settleMs / 1000.0 * SPRING_DURATION_FACTOR)).toFloat()
-            /* zeta is already the damping ratio derived from the ROM
-             * interpolator; do not map it a second time. */
-            val dampingRatio = if (zeta.isFinite()) {
-                zeta.coerceIn(0.45f, 1.0f)
-            } else {
-                zetaFromInterpolator(FALLBACK_FAST_OUT_SLOW_IN_MID)
-            }
+            val dampingRatio = if (zeta.isFinite()) zeta else zetaFromInterpolator(FALLBACK_FAST_OUT_SLOW_IN_MID)
+            val ratio = dampingRatio.coerceIn(MIN_ZETA, MAX_ZETA)
+            val omega = settleFactorFromZeta(ratio) / (ratio * settleMs / 1000f)
             return Spring(
                 stiffness = omega * omega,
-                damping = 2f * dampingRatio * omega,
+                damping = 2f * ratio * omega,
                 settleMs = settleMs,
             )
         }

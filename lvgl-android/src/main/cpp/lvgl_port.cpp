@@ -390,6 +390,11 @@ static void rebuild_screen(Engine* engine, int screen_id) {
      * string while ui_set_device_info() was reading its c_str(). */
     DeviceInfoSnapshot device_info = snapshot_device_info(engine);
     ui_set_device_info(device_info.as_ui());
+    /* Screen changes use the ROM medium (transition) role — never the 500 ms
+     * long role — so switching screens matches Android's wall-clock timing. */
+    LOGI("screen transition id=%d role=medium expected2%%=%.1fms", screen_id,
+         lvgl_anim::MotionConfig::settle_ms_from_spring(
+             lvgl_anim::motion_config().medium_spring));
     /* launch_screen() (demo_ui.cpp) cleans + builds the requested screen. */
     launch_screen(screen_id, dpi, theme);
     {
@@ -411,14 +416,19 @@ static void rebuild_screen(Engine* engine, int screen_id) {
     lv_refr_now(engine->display);
 }
 
-/* Apply the ROM-sampled animation path to framework-driven LVGL transitions.
- * LVGL creates scroll and style-transition animations with its own built-in
- * paths; rebind only those generic easing paths to fast_out_slow_in and leave
- * deliberate shape paths (step/overshoot/bounce/custom) untouched. Walking the
- * live screen each frame keeps this automatic for every consumer app — no
- * demo-code dependency — and catches animations started after config changes. */
+/* Apply the ROM-sampled animation path to TIME-BASED LVGL transitions only.
+ * Springs already carry the interpolator-derived damping in their physics and
+ * write values directly with lv_obj_set_*(); attaching this path as well would
+ * ease the same value twice (compounding deceleration). Spring-driven objects
+ * are tagged with LV_OBJ_FLAG_USER_1 and their whole subtree is skipped.
+ * For everything else, rebind only LVGL's generic easing paths to
+ * fast_out_slow_in and leave deliberate shape paths (step/overshoot/bounce/
+ * custom) untouched. Walking the live screen each frame keeps this automatic
+ * for every consumer app — no demo-code dependency — and catches animations
+ * started after config changes. */
 static void apply_motion_path_to_transitions(lv_obj_t* obj) {
     if (!obj) return;
+    if (lvgl_anim::is_spring_driven(obj)) return;
     lv_anim_t* anim = lv_anim_get(obj, nullptr);
     if (anim) {
         const lv_anim_path_cb_t cb = anim->path_cb;
@@ -1015,12 +1025,16 @@ Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig(JNIEnv* env, jobje
     if (interval_us > 33334) interval_us = 33334;
     engine->frameIntervalUs.store(interval_us);
     LOGI("ROM motion received: animatorScale=%.3f mid=%.3f refresh=%.1fHz interval=%.2fms "
-         "springs short=%.1f/%.1f medium=%.1f/%.1f long=%.1f/%.1f",
+         "springs short=%.1f/%.1f medium=%.1f/%.1f long=%.1f/%.1f "
+         "expected2%% short=%.1fms medium=%.1fms long=%.1fms",
          cfg.animator_scale, cfg.fast_out_slow_in_mid, cfg.refresh_hz,
          cfg.frame_interval_ms,
          cfg.short_spring.stiffness, cfg.short_spring.damping,
          cfg.medium_spring.stiffness, cfg.medium_spring.damping,
-         cfg.long_spring.stiffness, cfg.long_spring.damping);
+         cfg.long_spring.stiffness, cfg.long_spring.damping,
+         lvgl_anim::MotionConfig::settle_ms_from_spring(cfg.short_spring),
+         lvgl_anim::MotionConfig::settle_ms_from_spring(cfg.medium_spring),
+         lvgl_anim::MotionConfig::settle_ms_from_spring(cfg.long_spring));
 
     /* Spring re-rolling and indev updates touch LVGL objects, so run them on
      * the render thread. The cached struct above is used by init_display(). */

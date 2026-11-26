@@ -8,6 +8,8 @@ package com.lvgl.android.motion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 /** Pure JVM tests for the ROM -> LVGL motion mappings (no Android runtime). */
 class MotionConfigTest {
@@ -97,11 +99,25 @@ class MotionConfigTest {
     }
 
     @Test
-    fun interpolatorMidpointMapsToDampingRatio() {
-        assertEquals(1.0f, LvglMotionConfig.zetaFromInterpolator(0.5f), 0.0001f)
-        assertEquals(0.5f, LvglMotionConfig.zetaFromInterpolator(1.0f), 0.0001f)
-        assertEquals(0.78f, LvglMotionConfig.zetaFromInterpolator(0.72f), 0.0001f)
-        assertEquals(0.78f, LvglMotionConfig.zetaFromInterpolator(Float.NaN), 0.0001f)
+    fun interpolatorMidpointMapsToNearCriticalDamping() {
+        // fast_out_slow_in is monotonic; the previous 1.5 - mid mapping gave
+        // the Nubia ROM (mid=0.775) zeta=0.725 — visibly bouncy and slow.
+        assertEquals(0.95f, LvglMotionConfig.zetaFromInterpolator(0.72f), 0.0001f)
+        assertEquals(0.961f, LvglMotionConfig.zetaFromInterpolator(0.775f), 0.0001f)
+        assertEquals(0.95f, LvglMotionConfig.zetaFromInterpolator(Float.NaN), 0.0001f)
+        // Linear ROMs stay near critical, extreme easing clamps below 1.
+        assertEquals(0.906f, LvglMotionConfig.zetaFromInterpolator(0.5f), 0.0001f)
+        assertEquals(0.98f, LvglMotionConfig.zetaFromInterpolator(0.9f), 0.0001f)
+        assertEquals(0.98f, LvglMotionConfig.zetaFromInterpolator(0.95f), 0.0001f)
+        assertEquals(0.98f, LvglMotionConfig.zetaFromInterpolator(1.0f), 0.0001f)
+        var previous = -1f
+        for (mid in listOf(0.5f, 0.6f, 0.72f, 0.775f, 0.85f)) {
+            val z = LvglMotionConfig.zetaFromInterpolator(mid)
+            assertTrue("zeta must stay near critical at mid=$mid: $z", z in 0.9f..0.98f)
+            assertTrue("zeta must rise with easing at mid=$mid", z > previous)
+            previous = z
+        }
+        assertTrue(LvglMotionConfig.zetaFromInterpolator(0.775f) > 0.9f)
     }
 
     @Test
@@ -130,23 +146,70 @@ class MotionConfigTest {
     }
 
     @Test
-    fun springDurationAndScaleFollowOscillatorMath() {
-        val medium = LvglMotionConfig.springFromDuration(200, 1f, 0.78f)
-        val long = LvglMotionConfig.springFromDuration(400, 1f, 0.78f)
-        val fast = LvglMotionConfig.springFromDuration(200, 0.5f, 0.78f)
+    fun springSettleMatchesPolledRomDuration() {
+        val zeta = LvglMotionConfig.zetaFromInterpolator(0.775f)
+        val short = LvglMotionConfig.springFromDuration(100, 1f, zeta)
+        val medium = LvglMotionConfig.springFromDuration(200, 1f, zeta)
+        val long = LvglMotionConfig.springFromDuration(500, 1f, zeta)
+        val scaled = LvglMotionConfig.springFromDuration(200, 1.5f, zeta)
 
-        // omega = 2π / (durationSec * 0.6); stiffness = omega².
+        // The configured duration is the target 2% settle time — no 0.6 shortcut.
+        assertEquals(100f, short.settleMs, 0.0001f)
         assertEquals(200f, medium.settleMs, 0.0001f)
-        assertEquals(400f, long.settleMs, 0.0001f)
-        assertEquals(100f, fast.settleMs, 0.0001f)
-        assertEquals(medium.stiffness / 4f, long.stiffness, 0.5f)
-        assertEquals(medium.stiffness * 4f, fast.stiffness, 0.5f)
-        assertEquals(2f * 0.78f * (2 * Math.PI / (0.2 * 0.6)).toFloat(), medium.damping, 0.01f)
+        assertEquals(500f, long.settleMs, 0.0001f)
+        assertEquals(300f, scaled.settleMs, 0.0001f)
+
+        // The spring really carries the ROM-derived (near-critical) damping.
+        fun ratio(s: LvglMotionConfig.Spring) = s.damping / (2f * sqrt(s.stiffness))
+        assertEquals(zeta, ratio(medium), 0.0001f)
+        assertTrue(ratio(medium) >= 0.9f)
+
+        // Recover the modelled 2% settle from k/c: factor * 2000 / damping.
+        // zeta*omega = damping/2, so this must reproduce the configured ms.
+        fun modeledSettle(s: LvglMotionConfig.Spring): Float {
+            val z = ratio(s)
+            val factor = kotlin.math.ln(
+                1.0 / (0.02 * sqrt(1.0 - z.toDouble() * z.toDouble()))
+            ) / z.toDouble()
+            return (factor * 2000.0 / s.damping).toFloat()
+        }
+        assertEquals(medium.settleMs, modeledSettle(medium), 0.01f)
+        assertEquals(long.settleMs, modeledSettle(long), 0.01f)
+
+        // omega ∝ 1/duration, so stiffness ∝ 1/duration².
+        assertEquals(medium.stiffness * (200f / 500f) * (200f / 500f), long.stiffness, 0.5f)
         assertEquals(
             LvglMotionConfig.MIN_SPRING_MS,
-            LvglMotionConfig.springFromDuration(1, 0.01f, 0.78f).settleMs,
+            LvglMotionConfig.springFromDuration(1, 0.01f, zeta).settleMs,
             0.0001f,
         )
+        // A stale underdamped caller cannot reintroduce the old bounce.
+        assertEquals(0.9f, ratio(LvglMotionConfig.springFromDuration(200, 1f, 0.725f)), 0.0001f)
+    }
+
+    @Test
+    fun simulatedStepResponseSettlesWithinRomDuration() {
+        val zeta = LvglMotionConfig.zetaFromInterpolator(0.775f)
+        for ((duration, scale) in listOf(100 to 1f, 200 to 1f, 500 to 1f, 200 to 1.5f)) {
+            val spring = LvglMotionConfig.springFromDuration(duration, scale, zeta)
+            val targetMs = spring.settleMs / 1000f
+            val dt = 0.001f
+            var x = 0f
+            var velocity = 0f
+            var time = 0f
+            var lastOutside = 0f
+            while (time < 1f) {
+                val accel = -spring.stiffness * (x - 1f) - spring.damping * velocity
+                velocity += accel * dt
+                x += velocity * dt
+                time += dt
+                if (abs(x - 1f) > 0.02f) lastOutside = time
+            }
+            assertTrue("spring for ${duration}ms*$scale overshot its settle time: $lastOutside",
+                lastOutside <= targetMs + 0.002f)
+            assertTrue("spring for ${duration}ms*$scale settled too early: $lastOutside",
+                lastOutside >= targetMs * 0.7f)
+        }
     }
 
     @Test

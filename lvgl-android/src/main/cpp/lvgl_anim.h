@@ -17,6 +17,7 @@
 
 #include "lvgl/lvgl.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -42,7 +43,12 @@ namespace lvgl_anim {
  *   - stiffness/damping/mass  — raw physics (smooth_ui_toolkit style)
  *   - bounce + duration       — mapped to the above, motion.dev style
  *     bounce: 0 = critically damped (no overshoot), 1 = very bouncy
- *     duration: approximate settle time in seconds */
+ *     duration: approximate settle time in seconds
+ *
+ * Standard UI transitions use MotionConfig::spring_for() instead: it calibrates
+ * omega from the ROM interpolator so the guaranteed 2% settle time equals the
+ * polled Android duration. from_bounce_duration() is reserved for deliberately
+ * expressive effects (bouncy/wobbly), never for window/screen transitions. */
 struct SpringConfig {
     float stiffness = 170.0f;
     float damping   = 26.0f;
@@ -100,13 +106,28 @@ enum class MotionRole { Fixed, Short, Medium, Long, Bouncy, Wobbly };
 
 const SpringConfig& config_for_role(MotionRole role);
 
+/* Android's fast_out_slow_in decelerates monotonically. Stand-ins for it must
+ * be near-critically damped: the old `1.5 - mid` mapping produced zeta≈0.725
+ * on some ROMs, which overshot and felt like slow motion. Keep zeta below 1 so
+ * the envelope formula stays finite (0.98 already has no visible bounce). */
+constexpr float MIN_ZETA = 0.90f;
+constexpr float MAX_ZETA = 0.98f;
+constexpr float AOSP_FAST_OUT_SLOW_IN_ZETA = 0.95f;
+constexpr float AOSP_FAST_OUT_SLOW_IN_MID = 0.72f;
+constexpr float ZETA_MID_SLOPE = 0.20f;
+constexpr float SETTLE_TOLERANCE = 0.02f;
+constexpr float CRITICAL_SETTLE_FACTOR = 5.83f; /* (1+x)e^-x = 0.02 */
+
 /* Values resolved from the Android ROM by LvglMotionConfig and sent over JNI.
  * The pure mapping helpers mirror the Kotlin functions so native code can
  * derive the same numbers without a second source of truth. */
 struct MotionConfig {
-    SpringConfig short_spring  = SpringConfig::from_bounce_duration(0.1f, 0.3f);
-    SpringConfig medium_spring = SpringConfig::from_bounce_duration(0.2f, 0.45f);
-    SpringConfig long_spring   = SpringConfig::from_bounce_duration(0.2f, 0.6f);
+    SpringConfig short_spring =
+        spring_for(100.0f, 1.0f, zeta_from_interpolator(AOSP_FAST_OUT_SLOW_IN_MID));
+    SpringConfig medium_spring =
+        spring_for(200.0f, 1.0f, zeta_from_interpolator(AOSP_FAST_OUT_SLOW_IN_MID));
+    SpringConfig long_spring =
+        spring_for(400.0f, 1.0f, zeta_from_interpolator(AOSP_FAST_OUT_SLOW_IN_MID));
     SpringConfig bouncy_spring = SpringConfig::from_bounce_duration(0.55f, 0.6f);
     SpringConfig wobbly_spring = SpringConfig::from_bounce_duration(0.85f, 0.8f);
 
@@ -183,11 +204,45 @@ struct MotionConfig {
     }
 
     static float zeta_from_interpolator(float mid) {
-        if (!std::isfinite(mid)) mid = 0.72f;
-        float z = 1.5f - mid;
-        if (z < 0.45f) z = 0.45f;
-        if (z > 1.0f) z = 1.0f;
+        if (!std::isfinite(mid)) mid = AOSP_FAST_OUT_SLOW_IN_MID;
+        float m = mid;
+        if (m < 0.05f) m = 0.05f;
+        if (m > 0.95f) m = 0.95f;
+        float z = AOSP_FAST_OUT_SLOW_IN_ZETA +
+                  (m - AOSP_FAST_OUT_SLOW_IN_MID) * ZETA_MID_SLOPE;
+        if (z < MIN_ZETA) z = MIN_ZETA;
+        if (z > MAX_ZETA) z = MAX_ZETA;
         return z;
+    }
+
+    /* Natural-frequency time constants until the 2% error envelope
+     * e^(-zeta*omega*t)/sqrt(1-zeta^2) reaches SETTLE_TOLERANCE. Mirrors
+     * LvglMotionConfig.settleFactorFromZeta(). Conservative: the last 2%
+     * crossing of the actual step response is at or before this bound. */
+    static float settle_factor_from_zeta(float zeta) {
+        float z = std::isfinite(zeta) ? zeta : AOSP_FAST_OUT_SLOW_IN_ZETA;
+        if (z < MIN_ZETA) z = MIN_ZETA;
+        if (z > MAX_ZETA) z = MAX_ZETA;
+        const double denom = SETTLE_TOLERANCE * std::sqrt(1.0 - (double)z * z);
+        const double factor = std::log(1.0 / denom) / (double)z;
+        return (float)std::min((double)CRITICAL_SETTLE_FACTOR, factor);
+    }
+
+    /* Recover zeta from k/c (mass 1): zeta = c / (2*sqrt(k)). */
+    static float zeta_from_spring(const SpringConfig& s) {
+        if (!(s.stiffness > 0.0f) || !(s.damping > 0.0f)) return AOSP_FAST_OUT_SLOW_IN_ZETA;
+        float zeta = s.damping / (2.0f * std::sqrt(s.stiffness));
+        if (zeta < MIN_ZETA) zeta = MIN_ZETA;
+        if (zeta > MAX_ZETA) zeta = MAX_ZETA;
+        return zeta;
+    }
+
+    /* Modelled 2% settle time (ms) of a spring received over JNI.
+     * zeta*omega = damping/2, so settle_ms = factor * 1000 / (zeta*omega).
+     * Used both to re-roll expressive springs and for the hardware INFO log. */
+    static float settle_ms_from_spring(const SpringConfig& s) {
+        if (!(s.damping > 0.0f)) return 0.0f;
+        return settle_factor_from_zeta(zeta_from_spring(s)) * 2000.0f / s.damping;
     }
 
     static SpringConfig spring_for(float duration_ms, float scale, float zeta) {
@@ -195,12 +250,12 @@ struct MotionConfig {
         if (!(scale > 0.0f) || !std::isfinite(scale)) scale = 1.0f;
         float settle_ms = duration_ms * scale;
         if (settle_ms < 40.0f) settle_ms = 40.0f;
-        const float omega = 6.2831853f / ((settle_ms / 1000.0f) * 0.6f);
-        /* zeta is already the damping ratio derived from the ROM interpolator;
-         * do not map it a second time. */
-        float ratio = std::isfinite(zeta) ? zeta : zeta_from_interpolator(0.72f);
-        if (ratio < 0.45f) ratio = 0.45f;
-        if (ratio > 1.0f) ratio = 1.0f;
+        float ratio = std::isfinite(zeta) ? zeta : zeta_from_interpolator(AOSP_FAST_OUT_SLOW_IN_MID);
+        if (ratio < MIN_ZETA) ratio = MIN_ZETA;
+        if (ratio > MAX_ZETA) ratio = MAX_ZETA;
+        /* No 0.6 shortcut: match the ROM's wall-clock duration exactly. */
+        const float omega = settle_factor_from_zeta(ratio) /
+                            (ratio * (settle_ms / 1000.0f));
         SpringConfig cfg;
         cfg.stiffness = omega * omega;
         cfg.damping   = 2.0f * ratio * omega;
@@ -334,6 +389,13 @@ inline lv_anim_path_cb_t motion_path_cb() { return &motion_path; }
  * transitions call this when they start; the curve updates itself whenever a
  * new motion config arrives. */
 void apply_motion_path(lv_anim_t* anim);
+
+/* A spring writes its value straight to the object with lv_obj_set_*(): no
+ * LVGL animation is involved, so the sampled path must never be layered on
+ * top (that would ease the same value twice). Mark those objects with the
+ * USER_1 flag; lvgl_port.cpp skips them when rebinding time-based paths. */
+void mark_spring_driven(lv_obj_t* obj);
+bool is_spring_driven(lv_obj_t* obj);
 
 /* -------------------------------------------------------------------------- */
 /* Engine — owns and advances all active animations per frame                  */

@@ -50,13 +50,15 @@ Window::Window() : x_(0.0f), y_(0.0f), w_(800.0f), h_(480.0f), opa_(255.0f) {
     Engine::instance().add_spring(&w_);
     Engine::instance().add_spring(&h_);
     Engine::instance().add_spring(&opa_);
-    /* No fixed spring durations in the UI kit: geometry follows the ROM long
-     * transition, opacity the ROM short one. Engine::set_motion_config()
+    /* No fixed spring durations in the UI kit: window open/close is a common
+     * transition, so geometry follows the ROM medium (transition) role and
+     * opacity the ROM short one. The long role is reserved for genuinely long
+     * effects, not for every window animation. Engine::set_motion_config()
      * re-applies these roles when an animation scale changes. */
-    x_.set_role(MotionRole::Long);
-    y_.set_role(MotionRole::Long);
-    w_.set_role(MotionRole::Long);
-    h_.set_role(MotionRole::Long);
+    x_.set_role(MotionRole::Medium);
+    y_.set_role(MotionRole::Medium);
+    w_.set_role(MotionRole::Medium);
+    h_.set_role(MotionRole::Medium);
     opa_.set_role(MotionRole::Short);
 }
 
@@ -80,6 +82,8 @@ void Window::create(lv_obj_t* parent, const Config& config) {
      * full-screen child consumes the column and pushes the tiles off-screen).
      * Its size comes from the actual parent and is refreshed every frame. */
     lv_obj_add_flag(bg_close_, LV_OBJ_FLAG_FLOATING);
+    /* Spring writes opacity/geometry directly; never layer the LVGL path on it. */
+    mark_spring_driven(bg_close_);
     fit_backdrop_to_parent(bg_close_);
     lv_obj_set_style_bg_color(bg_close_, lv_color_hex(0x0B0E16), 0);
     /* Fully opaque scrim: a translucent backdrop let the launcher tiles show
@@ -95,6 +99,7 @@ void Window::create(lv_obj_t* parent, const Config& config) {
      * absolute positions for children of a laid-out parent otherwise). */
     container_ = lv_obj_create(parent);
     lv_obj_add_flag(container_, LV_OBJ_FLAG_FLOATING);
+    mark_spring_driven(container_);
     lv_obj_set_style_radius(container_, config.radius, 0);
     lv_obj_set_style_bg_color(container_, lv_color_hex(config.bg_color), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);

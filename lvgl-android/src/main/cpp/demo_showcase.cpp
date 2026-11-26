@@ -207,6 +207,8 @@ static void build_system_content(Window& win) {
         ui_decorative(col);
 
         auto* arc = lv_arc_create(col);
+        /* Spring sets the value directly; keep the LVGL path off this subtree. */
+        mark_spring_driven(arc);
         lv_obj_set_size(arc, ui_dpx(132, sd), ui_dpx(132, sd));
         lv_arc_set_bg_angles(arc, 0, 360);
         lv_arc_set_rotation(arc, 270);
@@ -484,6 +486,8 @@ static void make_tile(lv_obj_t* parent, const char* symbol, const char* name,
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     tp->icon = ui_make_label(col, symbol, ui_tokens().f_subtitle, lv_color_hex(accent));
+    /* Tile tap scale is spring-driven: one easing curve, not two. */
+    mark_spring_driven(tp->icon);
     ui_make_label(col, name, ui_tokens().f_body, ui_palette().dim);
 
     /* Store window config; window created on tap (avoids z-order blocking). */

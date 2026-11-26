@@ -36,7 +36,14 @@ const SpringConfig& config_for_role(MotionRole role) {
     return empty;
 }
 
-MotionConfig MotionConfig::defaults() { return MotionConfig(); }
+MotionConfig MotionConfig::defaults() {
+    MotionConfig cfg;
+    const float z = zeta_from_interpolator(AOSP_FAST_OUT_SLOW_IN_MID);
+    cfg.short_spring  = spring_for(100.0f, 1.0f, z);
+    cfg.medium_spring = spring_for(200.0f, 1.0f, z);
+    cfg.long_spring   = spring_for(400.0f, 1.0f, z);
+    return cfg;
+}
 
 MotionConfig MotionConfig::from_wire(const float* v, int count) {
     MotionConfig cfg = defaults();
@@ -82,13 +89,13 @@ MotionConfig MotionConfig::from_wire(const float* v, int count) {
         cfg.fast_out_slow_in = samples;
     }
     /* Bouncy/wobbly reuse the ROM short/long durations with their characteristic
-     * damping ratios, so they stay expressive while following device timing. */
-    auto settle_seconds = [](const SpringConfig& s) {
-        if (!(s.stiffness > 0.0f)) return 0.5f;
-        return 6.2831853f / (std::sqrt(s.stiffness) * 0.6f);
-    };
-    cfg.bouncy_spring = SpringConfig::from_bounce_duration(0.55f, settle_seconds(cfg.short_spring));
-    cfg.wobbly_spring = SpringConfig::from_bounce_duration(0.85f, settle_seconds(cfg.long_spring));
+     * damping ratios, so they stay expressive while following device timing.
+     * Derive the duration with the same settle model as the regular roles; the
+     * old 2*pi/(omega*0.6) heuristic made them follow a different clock. */
+    const float short_seconds = settle_ms_from_spring(cfg.short_spring) / 1000.0f;
+    const float long_seconds = settle_ms_from_spring(cfg.long_spring) / 1000.0f;
+    cfg.bouncy_spring = SpringConfig::from_bounce_duration(0.55f, short_seconds);
+    cfg.wobbly_spring = SpringConfig::from_bounce_duration(0.85f, long_seconds);
     return cfg;
 }
 
@@ -128,6 +135,23 @@ int32_t motion_path(const lv_anim_t* anim) {
 void apply_motion_path(lv_anim_t* anim) {
     if (anim) lv_anim_set_path_cb(anim, motion_path_cb());
 }
+
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
+void mark_spring_driven(lv_obj_t* obj) {
+    if (obj) lv_obj_set_flag(obj, LV_OBJ_FLAG_USER_1, true);
+}
+
+bool is_spring_driven(lv_obj_t* obj) {
+    return obj != nullptr && lv_obj_has_flag(obj, LV_OBJ_FLAG_USER_1);
+}
+
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 /* -------------------------------------------------------------------------- */
 /* SpringValue                                                                */
