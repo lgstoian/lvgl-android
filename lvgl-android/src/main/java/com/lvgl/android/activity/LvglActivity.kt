@@ -25,6 +25,7 @@ import com.lvgl.android.accessibility.LvglScreenReader
 import com.lvgl.android.config.DisplayMetricsManager
 import com.lvgl.android.engine.LvglEngine
 import com.lvgl.android.input.HardwareKeyboardHandler
+import com.lvgl.android.motion.LvglMotionConfig
 import com.lvgl.android.system.LvglDeviceInfo
 import com.lvgl.android.system.LvglSystemControl
 import com.lvgl.android.theme.MaterialTheme
@@ -209,9 +210,19 @@ abstract class LvglActivity : AppCompatActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "onCreate")
+        /* Claim ownership before the SurfaceView below can deliver any surface
+         * callbacks. The outgoing activity's late callbacks will now be
+         * rejected instead of stealing the shared display back. */
+        claimForeground(this)
 
         val engine = LvglEngine.instance
         engine.initialize()
+
+        /* ROM-adaptive motion is the SDK default: poll ViewConfiguration,
+         * Settings.Global animation scales and framework durations, then push
+         * the resolved values to LVGL. Re-applied on config changes and when a
+         * Settings.Global scale changes (see LvglMotionConfig). */
+        LvglMotionConfig.install(this)
 
         MaterialTheme.instance.initialize(this)
         MaterialTheme.instance.addListener(this)
@@ -337,6 +348,27 @@ abstract class LvglActivity : AppCompatActivity(),
          */
         @Volatile
         var screenResolver: ((Int) -> Class<*>?)? = null
+
+        /**
+         * The activity instance that most recently entered creation/resume.
+         * A newly created activity claims this *before* its surface callbacks
+         * arrive, so [LvglSurfaceView] can reject a late `surfaceChanged` from
+         * an outgoing activity instead of letting it re-bind — and then tear
+         * down — the process-wide display. @breadcrumb BC-001
+         */
+        @Volatile
+        private var foregroundActivity: LvglActivity? = null
+
+        internal fun claimForeground(activity: LvglActivity) {
+            foregroundActivity = activity
+        }
+
+        internal fun releaseForeground(activity: LvglActivity) {
+            if (foregroundActivity === activity) foregroundActivity = null
+        }
+
+        internal fun isForeground(activity: LvglActivity): Boolean =
+            foregroundActivity === activity
     }
 
     private fun applyWindowInsets() {
@@ -353,9 +385,17 @@ abstract class LvglActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume")
+        /* A returning activity must own the display again: a child that just
+         * finished had claimed it in its own onCreate. */
+        claimForeground(this)
         applyImmersiveMode()
         lvglView?.onResume()
         multiWindowManager.onResumed()
+        /* Re-poll ROM motion here as well as on configuration change: a display
+         * with a different refresh rate (multi-window / external display) is not
+         * always accompanied by a Configuration change. install() is a bounded
+         * one-shot poll and is safe on every resume. */
+        LvglMotionConfig.install(this)
         /* The announcement window can have been owned by a child activity that
          * just finished; point the screen reader back at this one. */
         LvglScreenReader.initialize(this)
@@ -398,6 +438,9 @@ abstract class LvglActivity : AppCompatActivity(),
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
+        /* Do not steal ownership back from a newer activity: the parent's
+         * onResume runs before this onDestroy and already reclaimed it. */
+        releaseForeground(this)
         /* Only clear the engine's navigator while it is still ours. The parent
          * activity's onResume runs BEFORE this onDestroy and has already
          * re-registered its own bridge; clearing unconditionally would wipe it
@@ -434,6 +477,8 @@ abstract class LvglActivity : AppCompatActivity(),
         multiWindowManager.onConfigurationChanged(newConfig)
         val theme = MaterialTheme.instance
         LvglEngine.instance.applyTheme(theme.isDarkMode, theme.materialPalette())
+        /* Animation scales and framework durations can change with the config. */
+        LvglMotionConfig.install(this)
         /* Resolution, network and USB facts can all change with the config. */
         refreshDeviceInfo()
     }

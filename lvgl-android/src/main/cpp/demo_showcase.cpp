@@ -81,6 +81,7 @@ struct ShowcaseState {
     float       time  = 0.0f;   /* accumulated seconds, for frame-rate-independent motion */
     int         tick_count = 0;
     bool        booting    = true;
+    uint32_t    motion_generation = 0;  /* re-role springs when scales change */
 } g_show;
 
 /* -------------------------------------------------------------------------- */
@@ -375,6 +376,18 @@ static void showcase_tick(float dt) {
     g_show.time += dt;
     float t = g_show.time;
 
+    /* Springs are owned by the showcase (not Engine-managed), so re-role them
+     * here when a new ROM motion snapshot arrives. */
+    const uint32_t generation = Engine::instance().motion_generation();
+    if (generation != g_show.motion_generation) {
+        g_show.motion_generation = generation;
+        g_show.boot_y.apply_motion();
+        g_show.boot_opa.apply_motion();
+        g_show.cpu.apply_motion();
+        g_show.mem.apply_motion();
+        for (auto& tile : g_show.tiles) tile.scale.apply_motion();
+    }
+
     /* Boot sequence: logo springs up, then fades to reveal tiles. */
     if (g_show.booting) {
         g_show.boot_y.tick(dt);
@@ -485,6 +498,14 @@ static void make_tile(lv_obj_t* parent, const char* symbol, const char* name,
 void build_showcase_screen_impl(int /*dpi*/) {
     g_show = {};
     g_show.tiles.reserve(4);
+    g_show.motion_generation = Engine::instance().motion_generation();
+
+    /* No fixed spring constants in the UI kit: boot/gauge motion follows the
+     * ROM medium transition and tile taps the ROM short one. */
+    g_show.boot_y.set_role(MotionRole::Medium);
+    g_show.boot_opa.set_role(MotionRole::Short);
+    g_show.cpu.set_role(MotionRole::Medium);
+    g_show.mem.set_role(MotionRole::Medium);
 
     /* Inline the screen setup (replicates make_screen + make_header + make_body
      * from demo_ui.cpp, which are static and not linkable here). */
@@ -552,6 +573,7 @@ void build_showcase_screen_impl(int /*dpi*/) {
         cfg.title_color  = rgb_hex(ui_palette().text);
         cfg.radius       = ui_dpx(28, SD);
         g_show.tiles.push_back(Tile());
+        g_show.tiles.back().scale.set_role(MotionRole::Short);
         make_tile(body, defs[i].icon, defs[i].name, defs[i].accent, cfg, defs[i].fn);
     }
 

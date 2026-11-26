@@ -1182,4 +1182,227 @@ class GuardCanaryTest {
             GuardRules.detectUnwiredFeatures(clean).isEmpty(),
         )
     }
+
+    // ---- v1.3.0 camera/motion wiring canaries -------------------------------
+
+    private fun v130Map(vararg entries: Pair<String, String>): Map<String, String> = mapOf(*entries)
+
+    private fun cleanMotionActivity() = """
+        class LvglActivity {
+            override fun onCreate() {
+                LvglMotionConfig.install(this)
+            }
+        }
+    """.trimIndent()
+
+    private fun cleanEngineKt() = """
+        class LvglEngine {
+            private external fun nativeSetMotionConfig(handle: Long, values: FloatArray)
+            fun applyMotionConfig(values: FloatArray) {
+                nativeSetMotionConfig(handle, values)
+            }
+        }
+    """.trimIndent()
+
+    private fun cleanNativeSources() = """
+        extern "C" JNIEXPORT void JNICALL
+        Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig(
+                JNIEnv* env, jobject thiz, jlong handle, jfloatArray values) {
+            apply_motion_config(env, handle, values);
+        }
+        void init_display() {
+            lv_indev_set_scroll_throw(indev, scroll_throw);
+        }
+    """.trimIndent()
+
+    private fun cleanCameraPreviewKt() = """
+        class LvglCameraPreview {
+            val displayAspect: Float = 0f
+            fun readRegion() {
+                val region = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+                publish(region)
+            }
+            val callback = object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult
+                ) {
+                    val crop = result.get(CaptureResult.SCALER_CROP_REGION)
+                    publish(crop)
+                }
+            }
+        }
+    """.trimIndent()
+
+    private fun cleanCameraSampleKt() = """
+        class CameraSampleActivity {
+            override fun onCreateLvgl() {
+                preview.setDisplayAspectListener { aspect, _, _ ->
+                    runOnUiThread { onCameraDisplayAspect(aspect) }
+                }
+            }
+        }
+    """.trimIndent()
+
+    private fun cleanV130Sources() = v130Map(
+        GuardRules.V130_ACTIVITY to cleanMotionActivity(),
+        GuardRules.V130_ENGINE to cleanEngineKt(),
+        GuardRules.V130_NATIVE to cleanNativeSources(),
+        GuardRules.V130_CAMERA_PREVIEW to cleanCameraPreviewKt(),
+        GuardRules.V130_CAMERA_SAMPLE to cleanCameraSampleKt(),
+    )
+
+    @Test
+    fun v130AggregateCanaryAcceptsCleanFixture() {
+        val hits = GuardRules.detectV130Violations(cleanV130Sources())
+        assertTrue(
+            "Canary failed: clean v1.3.0 fixture must pass:\n" + hits.joinToString("\n") { it.reason },
+            hits.isEmpty(),
+        )
+    }
+
+    @Test
+    fun motionConfigCallDetectorCatchesActivityThatNeverInstallsIt() {
+        val clean = cleanV130Sources()
+        assertTrue(
+            "Canary failed: an activity that installs LvglMotionConfig must pass",
+            GuardRules.detectMotionConfigCall(clean).isEmpty(),
+        )
+
+        val broken = clean + (
+            GuardRules.V130_ACTIVITY to """
+                class LvglActivity {
+                    // LvglMotionConfig.install(this) — comment only
+                    val unused = LvglMotionConfig.poll(this)
+                }
+            """.trimIndent()
+            )
+        assertTrue(
+            "Canary failed: a poll-only activity must be caught",
+            GuardRules.detectMotionConfigCall(broken)
+                .any { "must call LvglMotionConfig.install" in it.reason },
+        )
+    }
+
+    @Test
+    fun nativeMotionSetterDetectorCatchesDeclarationWithoutCallOrJni() {
+        val clean = cleanV130Sources()
+        assertTrue(
+            "Canary failed: a declared, called and exported setter must pass",
+            GuardRules.detectNativeMotionSetter(clean).isEmpty(),
+        )
+
+        val broken = clean + (
+            GuardRules.V130_ENGINE to cleanEngineKt()
+                .replace("nativeSetMotionConfig(handle, values)", "// call removed")
+            ) + (GuardRules.V130_NATIVE to "void noop() { }")
+        val hits = GuardRules.detectNativeMotionSetter(broken)
+        assertTrue(
+            "Canary failed: a setter that is declared but never called must be caught",
+            hits.any { "not just declared" in it.reason },
+        )
+        assertTrue(
+            "Canary failed: a missing JNI export must be caught",
+            hits.any { "Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig" in it.reason },
+        )
+    }
+
+    @Test
+    fun scrollThrowDetectorCatchesCommentOnlyMention() {
+        val clean = cleanV130Sources()
+        assertTrue(
+            "Canary failed: a real lv_indev_set_scroll_throw() call must pass",
+            GuardRules.detectScrollThrowApplication(clean).isEmpty(),
+        )
+
+        val broken = clean + (
+            GuardRules.V130_NATIVE to
+                "void init_display() { /* lv_indev_set_scroll_throw(indev, 0); */ }"
+            )
+        assertTrue(
+            "Canary failed: a comment mentioning scroll throw must be caught",
+            GuardRules.detectScrollThrowApplication(broken)
+                .any { "lv_indev_set_scroll_throw" in it.reason },
+        )
+    }
+
+    @Test
+    fun cameraAspectSourceDetectorCatchesOutputSizesOnlyFixture() {
+        val clean = cleanV130Sources()
+        assertTrue(
+            "Canary failed: active-array + CaptureResult aspect must pass",
+            GuardRules.detectCameraAspectSource(clean).isEmpty(),
+        )
+
+        val broken = clean + (
+            GuardRules.V130_CAMERA_PREVIEW to """
+                class LvglCameraPreview {
+                    val sizes = map.getOutputSizes(ImageFormat.YUV_420_888)
+                }
+            """.trimIndent()
+            )
+        val hits = GuardRules.detectCameraAspectSource(broken)
+        listOf("SENSOR_INFO_ACTIVE_ARRAY_SIZE", "CaptureCallback", "CaptureResult", "displayAspect")
+            .forEach { part ->
+                assertTrue(
+                    "Canary failed: detector must catch missing '$part'",
+                    hits.any { part in it.reason },
+                )
+            }
+    }
+
+    @Test
+    fun aspectListenerSubscriptionDetectorCatchesNoOpListener() {
+        val clean = cleanV130Sources()
+        assertTrue(
+            "Canary failed: a real aspect listener subscription must pass",
+            GuardRules.detectAspectListenerSubscription(clean).isEmpty(),
+        )
+
+        val noSubscription = clean + (
+            GuardRules.V130_CAMERA_SAMPLE to """
+                class CameraSampleActivity {
+                    fun refresh() { preview.selectPreviewSize(id, size) }
+                }
+            """.trimIndent()
+            )
+        assertTrue(
+            "Canary failed: a sample that never subscribes must be caught",
+            GuardRules.detectAspectListenerSubscription(noSubscription)
+                .any { "setDisplayAspectListener" in it.reason },
+        )
+
+        val noOp = clean + (
+            GuardRules.V130_CAMERA_SAMPLE to
+                "class CameraSampleActivity { fun f() { preview.setDisplayAspectListener { } } }"
+            )
+        assertTrue(
+            "Canary failed: a no-op aspect listener must be caught",
+            GuardRules.detectAspectListenerSubscription(noOp)
+                .any { "real lambda" in it.reason },
+        )
+    }
+
+    @Test
+    fun v130DetectorsFailClosedOnMissingSources() {
+        val allKeys = listOf(
+            GuardRules.V130_ACTIVITY,
+            GuardRules.V130_ENGINE,
+            GuardRules.V130_NATIVE,
+            GuardRules.V130_CAMERA_PREVIEW,
+            GuardRules.V130_CAMERA_SAMPLE,
+        )
+        allKeys.forEach { key ->
+            val blank = cleanV130Sources() + (key to "   ")
+            assertTrue(
+                "Canary failed: blank source ($key) must produce a fail-closed violation",
+                GuardRules.detectV130Violations(blank).any {
+                    it.file == key && "missing or blank" in it.reason
+                },
+            )
+        }
+        assertTrue(
+            "Canary failed: an empty source map must make every v1.3.0 detector fail closed",
+            GuardRules.detectV130Violations(emptyMap()).size >= 5,
+        )
+    }
 }

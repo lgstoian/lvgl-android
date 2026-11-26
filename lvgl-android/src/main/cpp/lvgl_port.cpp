@@ -40,6 +40,7 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <deque>
@@ -102,6 +103,14 @@ struct Engine {
     std::atomic<bool> paused{false};
     std::atomic<bool> stopping{false};   /* set during teardown; flush bails out */
     std::atomic<bool> initialized{false};
+    /* Target frame interval from LvglMotionConfig.refreshHz, in microseconds.
+     * The render loop paces to one deadline from this value; 16667 us = 60 Hz.
+     * @invariant 1000us <= frameIntervalUs <= 33334us (240..30 Hz) */
+    std::atomic<uint32_t> frameIntervalUs{16667};
+    /* Monotonic surface-bind generation. Every nativeInitDisplay bumps it. A
+     * surfaceDestroyed delivered late can then be recognised as stale (its
+     * bind has been superseded) and must not blank the newer surface. */
+    std::atomic<uint64_t> bindGeneration{0};
 
     /* Real display density, captured from nativesurfaceChanged. */
     int dpi = 440;
@@ -136,6 +145,11 @@ struct Engine {
 
     /* Cached theme; applied after every screen build and on config change. */
     UiTheme theme;
+
+    /* ROM-derived motion config (guarded by stateMutex). Applied to the indev
+     * on display init and on a runtime config push. @see LvglMotionConfig */
+    lvgl_android::lvgl_anim::MotionConfig motion;
+    bool motionSet = false;
 
     /* Last status text pushed from Kotlin + the screen it belongs to. Re-applied
      * by rebuild_screen() so an onResume rebuild never wipes live status. */
@@ -397,11 +411,42 @@ static void rebuild_screen(Engine* engine, int screen_id) {
     lv_refr_now(engine->display);
 }
 
+/* Apply the ROM-sampled animation path to framework-driven LVGL transitions.
+ * LVGL creates scroll and style-transition animations with its own built-in
+ * paths; rebind only those generic easing paths to fast_out_slow_in and leave
+ * deliberate shape paths (step/overshoot/bounce/custom) untouched. Walking the
+ * live screen each frame keeps this automatic for every consumer app — no
+ * demo-code dependency — and catches animations started after config changes. */
+static void apply_motion_path_to_transitions(lv_obj_t* obj) {
+    if (!obj) return;
+    lv_anim_t* anim = lv_anim_get(obj, nullptr);
+    if (anim) {
+        const lv_anim_path_cb_t cb = anim->path_cb;
+        if (cb == lv_anim_path_linear || cb == lv_anim_path_ease_in ||
+            cb == lv_anim_path_ease_out || cb == lv_anim_path_ease_in_out) {
+            lvgl_anim::apply_motion_path(anim);
+        }
+    }
+    const uint32_t count = lv_obj_get_child_count(obj);
+    for (uint32_t i = 0; i < count; i++) {
+        apply_motion_path_to_transitions(lv_obj_get_child(obj, i));
+    }
+}
+
 static void lvgl_thread_func(Engine* engine) {
     LOGI("LVGL thread started");
     /* Small delay to let the surface settle before the first frame. */
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    uint32_t last_frame_tick = lv_tick_get();
+
+    /* Single monotonic deadline. The old loop did cv.wait_for(16ms) followed by
+     * an extra sleep_for(since) when an LVGL timer was due — two independent
+     * sleeps per iteration produced irregular frame intervals and jerky
+     * scroll/fling. One deadline now drives exactly one lv_timer_handler()
+     * call; work arriving early is drained without rendering an extra frame. */
+    using clock = std::chrono::steady_clock;
+    auto deadline = clock::now();
+    auto last_frame = deadline;
+
     /* Reset the animation engine so stale animations from a prior session
      * (e.g. an activity that was destroyed without draining) never replay.
      * The showcase screen is built before the thread starts and its frame
@@ -416,10 +461,11 @@ static void lvgl_thread_func(Engine* engine) {
     while (engine->running.load()) {
         {
             std::unique_lock<std::mutex> lock(engine->mutex);
-            engine->cv.wait_for(lock, std::chrono::milliseconds(16),
-                                [&] { return !engine->taskQueue.empty() ||
-                                             engine->pendingWindowSet ||
-                                             !engine->running.load(); });
+            engine->cv.wait_until(lock, deadline, [&] {
+                return !engine->taskQueue.empty() ||
+                       (engine->pendingWindowSet && !engine->stopping.load()) ||
+                       !engine->running.load();
+            });
         }
         if (!engine->running.load()) break;
 
@@ -465,23 +511,38 @@ static void lvgl_thread_func(Engine* engine) {
         /* Flush any pending native->Kotlin navigation requests. */
         drainNavRequests(engine);
 
-        uint32_t since = lv_timer_handler();
+        const auto frame_start = clock::now();
+        if (frame_start < deadline) {
+            /* Woken by a task/window before the frame deadline: everything is
+             * already drained, so just go back to the SAME wait. No second
+             * sleep and no busy loop — wait_until blocks until the deadline. */
+            continue;
+        }
+
+        /* Framework transitions use the ROM interpolator shape. @why LVGL
+         * hardcodes ease_out for scroll/throw and style transitions; the sampled
+         * curve is what makes the whole UI feel like the device's own motion. */
+        if (lv_screen_active()) apply_motion_path_to_transitions(lv_screen_active());
+
+        /* One LVGL tick per deadline. The returned "time to next timer" is no
+         * longer used as an extra sleep; that was the pacing bug. */
+        (void)lv_timer_handler();
 
         /* Advance the animation engine by the real frame delta so spring motion
-         * is frame-rate independent. */
-        {
-            uint32_t now = lv_tick_get();
-            float dt = (now - last_frame_tick) / 1000.0f;
-            if (dt <= 0.0f) dt = 0.001f;
-            if (dt > 0.1f) dt = 0.1f;   /* clamp after a long stall (e.g. ANR) */
-            last_frame_tick = now;
-            lvgl_anim::Engine::instance().tick(dt);
-        }
+         * is frame-rate independent. Use the same monotonic clock that paces
+         * the frame, not the 32-bit LVGL tick. */
+        float dt = std::chrono::duration<float>(frame_start - last_frame).count();
+        last_frame = frame_start;
+        if (dt <= 0.0f) dt = 0.001f;
+        if (dt > 0.1f) dt = 0.1f;   /* clamp after a long stall (e.g. ANR) */
+        lvgl_anim::Engine::instance().tick(dt);
 
-        /* If LVGL asks for a shorter wait than our tick, honour it up to 50ms. */
-        if (since > 0 && since < 50) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(since));
-        }
+        /* Advance by exactly one interval. If a frame overran, drop the missed
+         * deadlines instead of catching up with a burst (capped catch-up). */
+        const auto interval = std::chrono::microseconds(engine->frameIntervalUs.load());
+        deadline += interval;
+        const auto now = clock::now();
+        if (deadline <= now) deadline = now + interval;
     }
     LOGI("LVGL thread stopped");
 }
@@ -535,6 +596,26 @@ static bool init_display(Engine* engine) {
     lv_indev_set_type(engine->indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(engine->indev, touch_read_cb);
     lv_indev_set_user_data(engine->indev, engine);
+
+    /* ROM-adaptive fling: Android friction -> LVGL scroll_throw (percent of
+     * velocity lost per frame), touch slop -> scroll limit, min fling velocity
+     * -> gesture minimum velocity. The defaults apply when Kotlin has not
+     * pushed a snapshot yet. */
+    {
+        std::lock_guard<std::mutex> state_lock(engine->stateMutex);
+        lv_indev_set_scroll_throw(engine->indev, engine->motion.scroll_throw);
+        lv_indev_set_scroll_limit(engine->indev, engine->motion.scroll_limit);
+        lv_indev_set_gesture_min_velocity(engine->indev, engine->motion.gesture_min_velocity);
+        uint32_t interval_us = (uint32_t)std::lround(engine->motion.frame_interval_ms * 1000.0f);
+        if (interval_us < 1000) interval_us = 1000;
+        if (interval_us > 33334) interval_us = 33334;
+        engine->frameIntervalUs.store(interval_us);
+        LOGI("LVGL motion applied: scrollThrow=%u%% scrollLimit=%u gestureMinVelocity=%u "
+             "decay=%.3f frameInterval=%.2fms refresh=%.1fHz",
+             (unsigned)engine->motion.scroll_throw, (unsigned)engine->motion.scroll_limit,
+             (unsigned)engine->motion.gesture_min_velocity, engine->motion.decay,
+             engine->motion.frame_interval_ms, engine->motion.refresh_hz);
+    }
 
     engine->initialized = true;
     return true;
@@ -715,6 +796,10 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /
     auto* engine = fromHandle(handle);
     if (!engine) return;
     LOGI("nativeInitDisplay: %dx%d dpi=%d", width, height, dpi);
+    /* A live bind wins over any queued stale deinit/pause. The generation lets
+     * the deinit path below detect that it no longer owns the surface. */
+    const uint64_t generation = engine->bindGeneration.fetch_add(1) + 1;
+    LOGI("surface bind generation=%llu", (unsigned long long)generation);
 
     if (width <= 0 || height <= 0) {
         engine->setError("invalid dimensions");
@@ -763,11 +848,13 @@ Java_com_lvgl_android_engine_LvglEngine_nativeInitDisplay(JNIEnv* env, jobject /
             engine->pendingWindow = window;
             engine->pendingWindowSet = true;
         }
-        /* A stale deinit may have set stopping/paused; a live surface request
-         * always wins. */
-        engine->stopping = false;
-        engine->paused   = false;
-        g_activeEngine   = engine;
+        /* A stale deinit may have set stopping/paused and cleared windowValid.
+         * Clear all three here so flush resumes immediately on the very next
+         * tick instead of waiting for a further lifecycle callback (BC-002). */
+        engine->stopping    = false;
+        engine->paused      = false;
+        engine->windowValid = true;
+        g_activeEngine      = engine;
         engine->cv.notify_all();
         /* DPI drives spacing and fonts, so a density change needs a rebuild
          * even when the pixel size is unchanged (S5). */
@@ -849,6 +936,23 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, job
                                                           jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
+
+    /* A newer surface can already be bound before Android delivers
+     * surfaceDestroyed for the outgoing activity. Never release that pending
+     * window or blank its flush: the Kotlin owner check normally prevents this
+     * call, but the native guard keeps it a no-op even if a stale callback
+     * gets through. @breadcrumb BC-001 */
+    bool newerSurfaceBound;
+    {
+        std::lock_guard<std::mutex> lock(engine->mutex);
+        newerSurfaceBound = engine->pendingWindowSet && engine->running.load() &&
+                            engine->initialized.load();
+    }
+    if (newerSurfaceBound) {
+        LOGI("nativeDeinitDisplay ignored: newer surface already bound (gen=%llu)",
+             (unsigned long long)engine->bindGeneration.load());
+        return;
+    }
     LOGI("nativeDeinitDisplay");
 
     /* The surface is going away (activity paused/stopped). Stop drawing to it,
@@ -868,9 +972,12 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, job
     }
     engine->windowValid = false;
     engine->paused = true;
-    /* Stop before the next lock attempt so an in-flight ANativeWindow_lock
-     * cannot wedge a later join (S2). nativeInitDisplay clears this again. */
-    engine->stopping = true;
+    /* Do NOT set `stopping` here. It is only needed by the full-rebuild path
+     * (which sets it before joining the render thread). Setting it on a plain
+     * surface release defers the pending-window install on the render thread
+     * and makes display_flush_cb bail, which is exactly how a stale deinit
+     * used to blank a freshly bound surface (BC-002). nativeInitDisplay also
+     * clears it on every bind. */
     /* Only forget the engine when no new surface has taken over; a stale
      * deinit must not clear the bridge used by the live activity (BC-001). */
     bool has_surface;
@@ -881,6 +988,50 @@ Java_com_lvgl_android_engine_LvglEngine_nativeDeinitDisplay(JNIEnv* /*env*/, job
     if (!has_surface && g_activeEngine == engine) g_activeEngine = nullptr;
     engine->cv.notify_all();
     LOGI("LVGL surface released");
+}
+
+/* ---- ROM-adaptive motion -------------------------------------------------- */
+
+JNIEXPORT void JNICALL
+Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig(JNIEnv* env, jobject /*thiz*/,
+                                                             jlong handle, jfloatArray values) {
+    auto* engine = fromHandle(handle);
+    if (!engine) return;
+
+    constexpr int kMotionWireSize = 14 + lvgl_android::lvgl_anim::INTERPOLATOR_SAMPLES;
+    float wire[kMotionWireSize] = {0};
+    jsize n = values ? env->GetArrayLength(values) : 0;
+    if (n > kMotionWireSize) n = kMotionWireSize;
+    if (n > 0) env->GetFloatArrayRegion(values, 0, n, wire);
+    const auto cfg = lvgl_android::lvgl_anim::MotionConfig::from_wire(wire, n);
+
+    {
+        std::lock_guard<std::mutex> lock(engine->stateMutex);
+        engine->motion     = cfg;
+        engine->motionSet  = true;
+    }
+    uint32_t interval_us = (uint32_t)std::lround(cfg.frame_interval_ms * 1000.0f);
+    if (interval_us < 1000) interval_us = 1000;
+    if (interval_us > 33334) interval_us = 33334;
+    engine->frameIntervalUs.store(interval_us);
+    LOGI("ROM motion received: animatorScale=%.3f mid=%.3f refresh=%.1fHz interval=%.2fms "
+         "springs short=%.1f/%.1f medium=%.1f/%.1f long=%.1f/%.1f",
+         cfg.animator_scale, cfg.fast_out_slow_in_mid, cfg.refresh_hz,
+         cfg.frame_interval_ms,
+         cfg.short_spring.stiffness, cfg.short_spring.damping,
+         cfg.medium_spring.stiffness, cfg.medium_spring.damping,
+         cfg.long_spring.stiffness, cfg.long_spring.damping);
+
+    /* Spring re-rolling and indev updates touch LVGL objects, so run them on
+     * the render thread. The cached struct above is used by init_display(). */
+    scheduleTask(engine, [engine, cfg]() {
+        ui_apply_motion_config(cfg);
+        if (engine->indev) {
+            lv_indev_set_scroll_throw(engine->indev, cfg.scroll_throw);
+            lv_indev_set_scroll_limit(engine->indev, cfg.scroll_limit);
+            lv_indev_set_gesture_min_velocity(engine->indev, cfg.gesture_min_velocity);
+        }
+    });
 }
 
 /* ---- Pause / resume ------------------------------------------------------ */
@@ -900,6 +1051,14 @@ Java_com_lvgl_android_engine_LvglEngine_nativePause(JNIEnv* /*env*/, jobject /*t
                                                           jlong handle) {
     auto* engine = fromHandle(handle);
     if (!engine) return;
+    /* A stale onPause from an outgoing activity can arrive after the new
+     * surface was bound. There is nothing drawable to pause in that window;
+     * leaving `paused` untouched keeps the flag from being set by a writer
+     * that no longer owns the display (BC-001). */
+    if (!engine->windowValid.load() || engine->stopping.load()) {
+        LOGI("LVGL pause ignored: no active surface");
+        return;
+    }
     engine->paused = true;
     LOGI("LVGL paused");
 }

@@ -24,6 +24,11 @@ import com.lvgl.android.annotations.SourceComments
  * @guard-rule rule=demo-ui-single-source test=HardRuleGuardTest
  * @guard-rule rule=dynamic-harness-crash-detection test=DynamicHarnessGuardTest
  * @guard-rule rule=play-compliance test=PlayComplianceGuardTest
+ * @guard-rule rule=wired-motion-config test=V130GuardTest
+ * @guard-rule rule=wired-native-motion-setter test=V130GuardTest
+ * @guard-rule rule=wired-scroll-throw test=V130GuardTest
+ * @guard-rule rule=camera-aspect-active-array test=V130GuardTest
+ * @guard-rule rule=wired-camera-aspect-listener test=V130GuardTest
  */
 object GuardRules {
 
@@ -47,6 +52,11 @@ object GuardRules {
         "wired-accessibility-announcements",
         "wired-camera-permission",
         "wired-ui-event-bridge",
+        "wired-motion-config",
+        "wired-native-motion-setter",
+        "wired-scroll-throw",
+        "camera-aspect-active-array",
+        "wired-camera-aspect-listener",
     )
 
     data class Violation(
@@ -765,6 +775,209 @@ object GuardRules {
         }
         return out
     }
+
+    // ---- v1.3.0 feature wiring guards --------------------------------------
+    //
+    // Camera aspect and ROM-derived motion are only real features when their
+    // call paths exist: LvglActivity must install LvglMotionConfig, the engine
+    // must call its native setter, native code must apply LVGL scroll throw,
+    // the camera must read the active-array/crop region from a CaptureResult,
+    // and the sample must consume the public aspect listener. A class existing
+    // in source is never evidence that any of this is wired (BC-037).
+
+    const val V130_ACTIVITY = "LvglActivity.kt"
+    const val V130_ENGINE = "LvglEngine.kt"
+    const val V130_CAMERA_PREVIEW = "LvglCameraPreview.kt"
+    const val V130_CAMERA_SAMPLE = "CameraSampleActivity.kt"
+    /** All framework native sources concatenated; JNI and LVGL calls may live
+     *  in different translation units. */
+    const val V130_NATIVE = "nativeSources"
+
+    val v130SourcePaths: Map<String, String> = mapOf(
+        V130_ACTIVITY to "lvgl-android/src/main/java/com/lvgl/android/activity/LvglActivity.kt",
+        V130_ENGINE to "lvgl-android/src/main/java/com/lvgl/android/engine/LvglEngine.kt",
+        V130_CAMERA_PREVIEW to
+            "lvgl-android/src/main/java/com/lvgl/android/camera/LvglCameraPreview.kt",
+        V130_CAMERA_SAMPLE to "app/src/main/java/com/lvgl/sample/CameraSampleActivity.kt",
+    )
+
+    /** Run every v1.3.0 wiring detector. Missing or blank sources are
+     *  violations, so a broken checkout cannot read as wired. */
+    fun detectV130Violations(sources: Map<String, String>): List<Violation> =
+        detectMotionConfigCall(sources) +
+            detectNativeMotionSetter(sources) +
+            detectScrollThrowApplication(sources) +
+            detectCameraAspectSource(sources) +
+            detectAspectListenerSubscription(sources)
+
+    /** ROM motion values are useless unless LvglActivity calls install(). */
+    fun detectMotionConfigCall(sources: Map<String, String>): List<Violation> {
+        val src = v130Code(sources, V130_ACTIVITY) ?: return listOf(
+            missingV130Source(V130_ACTIVITY, "motion config wiring")
+        )
+        if (MOTION_CONFIG_INSTALL.containsMatchIn(src)) return emptyList()
+        return listOf(
+            v130Violation(
+                V130_ACTIVITY,
+                "LvglActivity must call LvglMotionConfig.install(context) to apply ROM motion values",
+            )
+        )
+    }
+
+    /** The engine must both declare the JNI setter and actually call it, and
+     *  native code must define the matching export. A declaration alone is a
+     *  silent no-op. */
+    fun detectNativeMotionSetter(sources: Map<String, String>): List<Violation> {
+        val engine = v130Code(sources, V130_ENGINE) ?: return listOf(
+            missingV130Source(V130_ENGINE, "native motion setter wiring")
+        )
+        val native = v130Code(sources, V130_NATIVE) ?: return listOf(
+            missingV130Source(V130_NATIVE, "native motion setter wiring")
+        )
+        val out = mutableListOf<Violation>()
+        val declaration = NATIVE_MOTION_DECL.find(engine)
+        if (declaration == null) {
+            out.add(
+                v130Violation(
+                    V130_ENGINE,
+                    "LvglEngine must declare external fun nativeSetMotionConfig(...)",
+                )
+            )
+        } else if (!NATIVE_MOTION_CALL.containsMatchIn(engine.substring(declaration.range.last))) {
+            out.add(
+                v130Violation(
+                    V130_ENGINE,
+                    "nativeSetMotionConfig must be called from applyMotionConfig(), not just declared",
+                )
+            )
+        }
+        if (!JNI_MOTION_DEFINITION.containsMatchIn(native)) {
+            out.add(
+                v130Violation(
+                    V130_NATIVE,
+                    "native code must define Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig",
+                )
+            )
+        }
+        return out
+    }
+
+    /** LVGL's fling/scroll physics must actually be configured natively. A
+     *  mention inside a comment is not an applied value. */
+    fun detectScrollThrowApplication(sources: Map<String, String>): List<Violation> {
+        val native = v130Code(sources, V130_NATIVE) ?: return listOf(
+            missingV130Source(V130_NATIVE, "scroll throw wiring")
+        )
+        if (SCROLL_THROW_CALL.containsMatchIn(native)) return emptyList()
+        return listOf(
+            v130Violation(
+                V130_NATIVE,
+                "native code must call lv_indev_set_scroll_throw(...) with the ROM fling scale",
+            )
+        )
+    }
+
+    /** The streaming aspect must come from the active-array/crop region read
+     *  in a CaptureResult callback. Output sizes alone describe the sensor,
+     *  not the region actually captured (rotation/zoom). */
+    fun detectCameraAspectSource(sources: Map<String, String>): List<Violation> {
+        val src = v130Code(sources, V130_CAMERA_PREVIEW) ?: return listOf(
+            missingV130Source(V130_CAMERA_PREVIEW, "sensor aspect source")
+        )
+        val out = mutableListOf<Violation>()
+        if (!ACTIVE_ARRAY_KEY.containsMatchIn(src)) {
+            out.add(
+                v130Violation(
+                    V130_CAMERA_PREVIEW,
+                    "aspect must use CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE, " +
+                        "not getOutputSizes()",
+                )
+            )
+        }
+        if (!CAPTURE_CALLBACK.containsMatchIn(src) || !CAPTURE_COMPLETED.containsMatchIn(src)) {
+            out.add(
+                v130Violation(
+                    V130_CAMERA_PREVIEW,
+                    "a CaptureCallback with onCaptureCompleted must publish streaming aspect changes",
+                )
+            )
+        }
+        if (!CROP_REGION_FIELD.containsMatchIn(src)) {
+            out.add(
+                v130Violation(
+                    V130_CAMERA_PREVIEW,
+                    "the CaptureResult callback must read CaptureResult.SCALER_CROP_REGION",
+                )
+            )
+        }
+        if (!DISPLAY_ASPECT_PROPERTY.containsMatchIn(src)) {
+            out.add(
+                v130Violation(
+                    V130_CAMERA_PREVIEW,
+                    "the resolved aspect must be published through the displayAspect property",
+                )
+            )
+        }
+        return out
+    }
+
+    /** The sample must consume the public listener with a real callback; a
+     *  subscribe-to-nothing lambda is not wiring. */
+    fun detectAspectListenerSubscription(sources: Map<String, String>): List<Violation> {
+        val src = v130Code(sources, V130_CAMERA_SAMPLE) ?: return listOf(
+            missingV130Source(V130_CAMERA_SAMPLE, "camera aspect listener wiring")
+        )
+        val call = ASPECT_LISTENER_SUBSCRIBE.find(src)
+        if (call == null) {
+            return listOf(
+                v130Violation(
+                    V130_CAMERA_SAMPLE,
+                    "camera sample must subscribe via preview.setDisplayAspectListener { ... }",
+                )
+            )
+        }
+        val body = src.substring(
+            call.range.last,
+            minOf(src.length, call.range.last + ASPECT_LISTENER_BODY_CHARS),
+        )
+        if (!ASPECT_LISTENER_CALLBACK.containsMatchIn(body)) {
+            return listOf(
+                v130Violation(
+                    V130_CAMERA_SAMPLE,
+                    "the aspect listener callback must be a real lambda that updates the overlay",
+                )
+            )
+        }
+        return emptyList()
+    }
+
+    private fun v130Code(sources: Map<String, String>, key: String): String? =
+        sources[key]?.takeIf { it.isNotBlank() }?.let { SourceComments.stripComments(it) }
+
+    private fun missingV130Source(key: String, feature: String): Violation =
+        v130Violation(key, "$feature source is missing or blank; cannot verify wiring")
+
+    private fun v130Violation(file: String, reason: String): Violation =
+        Violation(file = file, line = 0, text = "", reason = reason)
+
+    private val MOTION_CONFIG_INSTALL =
+        Regex("""\bLvglMotionConfig\s*\.\s*install\s*\(""")
+    private val NATIVE_MOTION_DECL =
+        Regex("""external\s+fun\s+nativeSetMotionConfig\s*\(""")
+    private val NATIVE_MOTION_CALL = Regex("""\bnativeSetMotionConfig\s*\(""")
+    private val JNI_MOTION_DEFINITION =
+        Regex("""Java_com_lvgl_android_engine_LvglEngine_nativeSetMotionConfig\s*\(""")
+    private val SCROLL_THROW_CALL = Regex("""\blv_indev_set_scroll_throw\s*\(""")
+    private val ACTIVE_ARRAY_KEY = Regex("""\bSENSOR_INFO_ACTIVE_ARRAY_SIZE\b""")
+    private val CAPTURE_CALLBACK = Regex("""\bCaptureCallback\b""")
+    private val CAPTURE_COMPLETED = Regex("""\bonCaptureCompleted\s*\(""")
+    private val CROP_REGION_FIELD =
+        Regex("""\bCaptureResult\s*\.\s*SCALER_CROP_REGION\b""")
+    private val DISPLAY_ASPECT_PROPERTY = Regex("""\bdisplayAspect\b""")
+    private val ASPECT_LISTENER_SUBSCRIBE =
+        Regex("""\bpreview\s*\.\s*setDisplayAspectListener\s*(?:\(|\{)""")
+    private val ASPECT_LISTENER_CALLBACK = Regex("""->|previewAspect\s*=|applyPreviewLayout\s*\(""")
+    private const val ASPECT_LISTENER_BODY_CHARS = 400
 
     private fun featureCode(sources: Map<String, String>, key: String): String? =
         sources[key]?.takeIf { it.isNotBlank() }?.let { SourceComments.stripComments(it) }

@@ -1,9 +1,10 @@
 # Performance measurement and honest caveats
 
-> Applies to v1.2.0. This page explains how to measure LVGL rendering with
+> Applies to v1.3.0. This page explains how to measure LVGL rendering with
 > `LvglPerformanceMonitor`, what to expect on real hardware, and where a custom
-> render thread has costs. **No measured numbers are claimed here** — the
-> results table is a placeholder to be filled in after a hardware run.
+> render thread has costs. **No measured numbers are claimed here.** The table
+> below is a placeholder: measured values will be recorded only after a hardware
+> run, and no emulator or estimated figure is presented as a result.
 
 ## 1. Measuring with `LvglPerformanceMonitor`
 
@@ -39,23 +40,46 @@ The monitor's state is intentionally **not synchronized**: call every method
 from the same thread (normally the LVGL render thread). It is a debugging aid,
 not a production profiling tool.
 
-### Recommended command
+### Measurement command
 
 Run on a physical device, with the release APK (not the debug build), at a
 fixed refresh rate and brightness, for at least 60 seconds per screen:
 
 ```powershell
-# Clear old logs, exercise the screen, then dump the monitor tag.
+# 0. Install the artifact being measured (release, never debug).
+& "D:\ASDK\platform-tools\adb.exe" install -r app\build\outputs\apk\release\app-universal-release.apk
+& "D:\ASDK\platform-tools\adb.exe" shell am start -n com.lvgl.sample/.MainActivity
+
+# 1. Record the device configuration and the motion values actually polled.
+& "D:\ASDK\platform-tools\adb.exe" shell wm size
+& "D:\ASDK\platform-tools\adb.exe" shell wm density
+& "D:\ASDK\platform-tools\adb.exe" shell settings get global animator_duration_scale
+& "D:\ASDK\platform-tools\adb.exe" shell settings get global transition_animation_scale
+& "D:\ASDK\platform-tools\adb.exe" shell settings get global window_animation_scale
+& "D:\ASDK\platform-tools\adb.exe" logcat -d -s LvglMotionConfig
+
+# 2. Clear old logs, call start() from the app, exercise ONE screen for ~60 s.
 & "D:\ASDK\platform-tools\adb.exe" logcat -c
 # ... interact with the app for ~60 s ...
+
+# 3. Dump the monitor. Capture one line per completed one-second window.
 & "D:\ASDK\platform-tools\adb.exe" logcat -d -s LvglPerfMon
 ```
 
-Capture both the logcat line (`FPS: … | Avg: …ms | Min: …ms | Max: …ms | Total: … frames`)
-and `getStats()` if the app surfaces it. For comparison, also capture the
-optional layout-lint tag `LVGLLayout` and the engine tag `LvglEngine`.
+Keep the monitor's `start()`/`stop()` calls in the app around the measured
+window; `onFrameRendered()` is still driven by the app (for example the game
+sample's frame loop), not by a native callback. Capture the logcat line
+(`FPS: … | Avg: …ms | Min: …ms | Max: …ms | Total: … frames`) and `getStats()`
+if the app surfaces it. For comparison, also capture the optional layout-lint
+tag `LVGLLayout` and the engine tag `LvglEngine`. Repeat per screen and note the
+device, Android version, ABI, refresh rate and motion scales alongside each row.
 
-## 2. Results — to be filled after the hardware run
+## 2. Results — recorded after the hardware run
+
+These cells are deliberately empty. **Measured values will be recorded here
+after a hardware run**; do not copy emulator numbers, debug-build logs or
+estimates into them, and do not treat a placeholder row as evidence of a
+measured result.
 
 | Device / ABI | Android | Screen | FPS (avg) | Frame time avg / min / max (ms) | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -103,6 +127,9 @@ That is a deliberate trade-off, not an oversight:
 - Touch is forwarded from the UI thread to JNI; callbacks return on the LVGL
   thread. Anything touching Android views must hop back to the UI thread
   (`runOnUiThread`), which adds a scheduling hop.
+- v1.3.0 motion values are polled from ROM settings and framework durations
+  ([motion.md](motion.md)). They affect spring and transition timing, not
+  frame pacing, so record the polled scales next to each measurement row.
 - The monitor is a debug aid. Do not gate app behaviour on its values or ship
   per-frame logging.
 

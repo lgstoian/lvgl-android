@@ -11,7 +11,12 @@
     <string name="camera_status_none">Camera status: no cameras found</string>
     <string name="camera_status_single">Camera status: only 1 camera available</string>
     <string name="camera_status_unavailable">Camera status: camera %1$s unavailable</string>
-    <string name="camera_hint">Tap the preview to switch cameras</string>
+    <string name="camera_status_not_ready">Camera status: preview not ready</string>
+    <string name="camera_status_capturing">Camera status: capturing still</string>
+    <string name="camera_status_captured">Camera status: saved photo %1$d</string>
+    <string name="camera_status_capture_failed">Camera status: capture failed</string>
+    <string name="camera_hint">Tap preview to switch</string>
+    <string name="camera_capture_button">CAPTURE</string>
 
     <!-- Launcher sample: the app grid is rendered by the native UI kit -->
 

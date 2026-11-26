@@ -10,6 +10,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.os.Environment
 import android.util.Log
 import android.util.Size
 import android.view.Gravity
@@ -17,13 +18,18 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.lvgl.android.activity.LvglActivity
+import com.lvgl.android.camera.CaptureNaming
 import com.lvgl.android.camera.LvglCameraPreview
+import com.lvgl.android.camera.StillCaptureResult
 import com.lvgl.android.navigation.LvglNavigation
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
@@ -38,9 +44,11 @@ class CameraSampleActivity : LvglActivity() {
     private lateinit var preview: LvglCameraPreview
     private var previewView: SurfaceView? = null
     private var hintView: TextView? = null
+    private var captureButton: Button? = null
     private var previewSurface: Surface? = null
     private var cameraIds: List<String> = emptyList()
     private var cameraIndex = 0
+    private var captureCount = 0
     private var previewAspect = 4f / 3f
     /** False while paused/stopped so late surface callbacks cannot restart frames. */
     private var previewActive = false
@@ -53,6 +61,12 @@ class CameraSampleActivity : LvglActivity() {
         preview = LvglCameraPreview(this)
         preview.onOpenResult = { id, opened ->
             runOnUiThread { onOpenResult(id, opened) }
+        }
+        /* Camera2 reports the real sensor aspect from the active array and,
+         * once streaming, from the crop region. Its callback runs off the UI
+         * thread, so hop back before touching the preview SurfaceView. */
+        preview.setDisplayAspectListener { aspect, _, _ ->
+            runOnUiThread { onCameraDisplayAspect(aspect) }
         }
         checkCameraPermission()
     }
@@ -135,20 +149,25 @@ class CameraSampleActivity : LvglActivity() {
         Log.i(TAG, "Preview view ${width}x${height} px aspect=$previewAspect band=${band.first}x${band.second}")
     }
 
+    /** Applies a real sensor/crop aspect reported by the SDK at runtime. */
+    private fun onCameraDisplayAspect(aspect: Float) {
+        if (!previewActive || isFinishing || isDestroyed) return
+        if (aspect <= 0f || !aspect.isFinite()) return
+        previewAspect = aspect
+        applyPreviewLayout()
+        Log.i(TAG, "Real camera display aspect=$aspect")
+    }
+
     /** Re-selects the sensor-matched output size and re-fits the preview view. */
     private fun refreshPreviewSize(cameraId: String) {
         val (bandWidth, bandHeight) = previewBand()
         if (bandWidth <= 0 || bandHeight <= 0) return
-        val chosen = preview.selectPreviewSize(cameraId, Size(bandWidth, bandHeight))
-        /* selectPreviewSize returns the EFFECTIVE on-screen size: the raw YUV
-         * size rotated by SENSOR_ORIENTATION vs the current device rotation.
-         * Letterboxing that aspect keeps the overlay un-stretched and oriented
-         * like the phone (portrait frames in portrait, landscape in landscape). */
-        previewAspect = if (chosen.height > 0) {
-            chosen.width.toFloat() / chosen.height
-        } else {
-            4f / 3f
-        }
+        /* Selection now targets the REAL active-array/crop aspect; the returned
+         * size is only the best available YUV output (which can be square on
+         * some devices). Letterboxing uses the sensor-derived displayAspect,
+         * never the aspect of a square output size. */
+        preview.selectPreviewSize(cameraId, Size(bandWidth, bandHeight))
+        previewAspect = preview.displayAspect
         applyPreviewLayout()
     }
 
@@ -163,6 +182,10 @@ class CameraSampleActivity : LvglActivity() {
             holder.setFormat(PixelFormat.RGBA_8888)
             isClickable = true
             setOnClickListener { switchCamera() }
+            /* This preview overlay is a SEPARATE SurfaceView owner from the
+             * LVGL LvglSurfaceView created by LvglActivity. Its callbacks must
+             * never bind, pause or unbind the LVGL display; otherwise a camera
+             * overlay teardown could blank the LVGL screen behind it (BC-001). */
             holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) {
                     previewSurface = holder.surface
@@ -178,6 +201,9 @@ class CameraSampleActivity : LvglActivity() {
                 ) = Unit
 
                 override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    /* Identity-check: a stale callback for a previously
+                     * destroyed overlay must not stop the current session. */
+                    if (previewSurface !== holder.surface) return
                     previewSurface = null
                     preview.stopPreview()
                 }
@@ -196,7 +222,7 @@ class CameraSampleActivity : LvglActivity() {
         val hint = TextView(this).apply {
             text = getString(R.string.camera_hint)
             gravity = Gravity.CENTER
-            textSize = 12f
+            textSize = 10f
         }
         addContentView(
             hint,
@@ -205,10 +231,33 @@ class CameraSampleActivity : LvglActivity() {
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = dp(296)
+                /* The preview band ends at dp(292); the LVGL "Camera2 Preview"
+                 * heading starts a few dp below. Keep the short hint in that
+                 * gap so it never covers either the preview or LVGL text. */
+                topMargin = dp(292)
             }
         )
         hintView = hint
+
+        val capture = Button(this).apply {
+            text = getString(R.string.camera_capture_button)
+            isAllCaps = false
+            setOnClickListener { captureStill() }
+        }
+        addContentView(
+            capture,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                /* The LVGL camera content ends well above this; placing the
+                 * native button in the clear band above the footer keeps it
+                 * tappable without covering the live status line. */
+                topMargin = dp(700)
+            }
+        )
+        captureButton = capture
     }
 
     private fun removePreviewOverlay() {
@@ -216,7 +265,59 @@ class CameraSampleActivity : LvglActivity() {
         previewView = null
         hintView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         hintView = null
+        captureButton?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        captureButton = null
         previewSurface = null
+    }
+
+    /** Requests a JPEG still; the SDK callback runs off the UI thread. */
+    @SuppressLint("MissingPermission")
+    private fun captureStill() {
+        if (!permissionGranted()) {
+            setStatus(getString(R.string.camera_status_denied))
+            return
+        }
+        if (!previewActive || previewSurface == null) {
+            setStatus(getString(R.string.camera_status_not_ready))
+            return
+        }
+        /* CAMERA was checked above; the SDK rechecks before opening the request. */
+        setStatus(getString(R.string.camera_status_capturing))
+        preview.captureStillJpeg { result ->
+            runOnUiThread { onStillCaptured(result) }
+        }
+    }
+
+    /** Writes the JPEG into this app's own Pictures dir (no storage permission). */
+    private fun onStillCaptured(result: StillCaptureResult?) {
+        if (!previewActive || isFinishing || isDestroyed) return
+        if (result == null || result.jpegBytes.isEmpty()) {
+            setStatus(getString(R.string.camera_status_capture_failed))
+            return
+        }
+        val dir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        if (dir == null || (!dir.exists() && !dir.mkdirs())) {
+            setStatus(getString(R.string.camera_status_capture_failed))
+            Log.e(TAG, "Pictures directory unavailable")
+            return
+        }
+        val name = CaptureNaming.timestampedJpegName(System.currentTimeMillis())
+        val file = File(dir, name)
+        try {
+            FileOutputStream(file).use { stream ->
+                stream.write(result.jpegBytes)
+                stream.flush()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save still $name", e)
+            setStatus(getString(R.string.camera_status_capture_failed))
+            return
+        }
+        captureCount++
+        /* The full timestamped name stays in the log; the on-screen status is
+         * deliberately short so it fits the LVGL status line on one line. */
+        setStatus(getString(R.string.camera_status_captured, captureCount))
+        Log.i(TAG, "Saved still ${file.absolutePath} bytes=${result.jpegBytes.size} rotation=${result.orientationDegrees} jpeg=${result.imageWidth}x${result.imageHeight} count=$captureCount camera=${result.cameraId}")
     }
 
     @SuppressLint("MissingPermission")

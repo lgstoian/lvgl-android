@@ -1,7 +1,7 @@
 # Public API reference
 
 Concise reference for the public Kotlin API in `com.lvgl.android`, updated for
-**v1.2.0**. It documents only what exists in
+**v1.3.0**. It documents only what exists in
 `lvgl-android/src/main/java/com/lvgl/android/` — internal helpers such as the
 accessibility node provider are deliberately not listed. For a step-by-step
 walkthrough see [quickstart.md](quickstart.md); for the architecture and trade
@@ -61,7 +61,10 @@ with `deinitDisplay(owner)`; the engine itself outlives activities. Also exposes
 `setDeviceInfo()`, `isDisplayReady()`, `currentScreen()`, `captureFrame()`,
 `lastError()`, `dumpLayoutReport()`, `registerScreen()`, `unregisterScreen()`,
 `updateNode()`, `nativeLoadError` and the `screenNavigator` / `uiEventListener`
-properties. Access it via `LvglEngine.instance`.
+properties. Since v1.3.0 it also exposes
+`applyMotionConfig(values: FloatArray)`, which marshals a `LvglMotionConfig`
+snapshot to the native engine (and calls the `nativeSetMotionConfig` JNI
+setter). Access it via `LvglEngine.instance`.
 
 If `liblvgl_android.so` cannot be loaded, `initialize()` records the reason in
 `nativeLoadError` instead of crashing, so an app can show a friendly message.
@@ -394,16 +397,63 @@ Since v1.2.0: `selectPreviewSize(cameraId, target)` picks the available
 `chosenPreviewSize` exposes the selected size. Apps rendering into their own
 surface should size/letterbox it to that aspect instead of stretching it.
 
+Since v1.3.0: the effective display aspect is derived from the sensor active
+array (`CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE`) and from the crop
+region in a `CaptureResult` callback, so rotation, zoom and camera switching
+are reflected without re-probing output sizes:
+
+- `val displayAspect: Float` — the current effective on-screen aspect ratio.
+- `fun setDisplayAspectListener(listener: ((aspect: Float, width: Int, height: Int) -> Unit)?)`
+  — installs a listener (it is called immediately with the current value), or
+  pass `null` to clear it. `width`/`height` are display-oriented (rotated)
+  region dimensions. Callbacks arrive on a Camera2 thread: hop to the UI
+  thread before touching views.
+
 ```kotlin
 val preview = LvglCameraPreview(this)
 val size = preview.selectPreviewSize("0", Size(width, height))
+preview.setDisplayAspectListener { aspect, _, _ ->
+    runOnUiThread { fitOverlayToAspect(aspect) }
+}
 preview.startPreview(surface)
 preview.open("0")
 ```
 
+See [interop.md](interop.md) for the native-overlay pattern.
+
 The `CAMERA` permission is required and must be requested at runtime; denial
 leaves the rest of the app usable. See [interop.md](interop.md) for the full
 overlay pattern.
+
+## motion
+
+### `LvglMotionConfig`
+
+Reads ROM motion values once and applies them to LVGL scrolling and spring /
+window transitions. `LvglActivity` installs it by default on create and on
+configuration change; apps can override or disable it. See
+[motion.md](motion.md) for the polling details, defaults and traps.
+
+```kotlin
+import com.lvgl.android.motion.LvglMotionConfig
+
+val snapshot = LvglMotionConfig.poll(context)
+LvglMotionConfig.setOverride(snapshot)   // null resumes polling
+LvglMotionConfig.setEnabled(false)       // opt out of default polling/observer
+```
+
+| Member | Meaning |
+| --- | --- |
+| `LvglMotionConfig.poll(context)` | Bounded, single-shot snapshot of `ViewConfiguration`, `Settings.Global` and framework duration values, with fallbacks. |
+| `LvglMotionConfig.install(context)` | Poll (or use the override), log the values and push them through `LvglEngine.applyMotionConfig()`. |
+| `config.apply()` | Apply an existing snapshot to the native engine. |
+| `config.logPolled()` / `config.logApplied()` | Log the polled / applied values at INFO. |
+| `LvglMotionConfig.setOverride(config?)` | Pin a snapshot for later installs; `null` resumes device polling. |
+| `LvglMotionConfig.setEnabled(enabled)` | Enable or disable default polling and the `Settings.Global` observer. |
+
+The configuration is process-wide, like `LvglEngine`. Never push values into
+LVGL widgets directly from the UI thread — `install()` is the single path that
+marshals them to the LVGL thread.
 
 ## system
 

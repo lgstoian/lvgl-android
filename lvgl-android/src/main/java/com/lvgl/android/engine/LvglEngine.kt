@@ -39,6 +39,9 @@ class LvglEngine private constructor() {
     /** Last pushed device-info payload, kept so a screen can be refreshed. */
     private var cachedDeviceInfo: Array<String>? = null
 
+    /** Last pushed motion payload; replayed when the native engine is created. */
+    private var cachedMotionConfig: FloatArray? = null
+
     /** True once the native engine object has been allocated. */
     val initialized: Boolean get() = nativeHandle != 0L
 
@@ -65,6 +68,7 @@ class LvglEngine private constructor() {
         nativeHandle = nativeCreate()
         screenNavigator?.let { nativeSetNavCallback(nativeHandle, it) }
         uiEventListener?.let { nativeSetUiListener(nativeHandle, it) }
+        cachedMotionConfig?.let { nativeSetMotionConfig(nativeHandle, it) }
     }
 
     /**
@@ -119,6 +123,28 @@ class LvglEngine private constructor() {
      */
     fun onTouchEvent(action: Int, x: Float, y: Float) {
         if (nativeHandle != 0L) nativeTouchEvent(nativeHandle, action, x, y)
+    }
+
+    private external fun nativeSetMotionConfig(handle: Long, values: FloatArray)
+
+    /**
+     * Pushes a ROM-adaptive motion snapshot to native code. The fixed wire
+     * format (`LvglMotionConfig.WIRE_SIZE` floats: thresholds, springs, refresh
+     * rate, frame interval and the sampled ROM interpolator) is defined by
+     * `com.lvgl.android.motion.LvglMotionConfig`; an array of a different length
+     * is ignored. Safe to call before the display exists: the values are cached
+     * and replayed after [initialize], and cached natively until a display is
+     * created. Call again when animation scales, the refresh rate or the
+     * interpolator change.
+     */
+    fun applyMotionConfig(values: FloatArray) {
+        if (values.size != MOTION_WIRE_SIZE) {
+            Log.w(TAG, "Ignoring motion payload of size ${values.size}; expected $MOTION_WIRE_SIZE")
+            return
+        }
+        val copy = values.copyOf()
+        cachedMotionConfig = copy
+        if (nativeHandle != 0L) nativeSetMotionConfig(nativeHandle, copy)
     }
 
     /**
@@ -375,6 +401,7 @@ class LvglEngine private constructor() {
      */
     companion object {
         private const val TAG = "LvglEngine"
+        private const val MOTION_WIRE_SIZE = 25
 
         val instance: LvglEngine by lazy { LvglEngine() }
     }

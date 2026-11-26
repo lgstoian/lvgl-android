@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-26
+
+ROM-faithful motion and sensor-accurate camera aspect. VersionCode 4.
+
+### Added
+
+- `LvglMotionConfig` (`com.lvgl.android.motion`): polls the device's animation
+  scales (`Settings.Global`), framework animation durations and
+  `ViewConfiguration` fling/touch constants once at startup, logs the polled
+  values, and pushes them to LVGL through `LvglEngine.applyMotionConfig()`.
+  Apps can supply a snapshot with `setOverride(config)` or turn default polling
+  off with `setEnabled(false)`. See [docs/motion.md](docs/motion.md).
+- Camera aspect API: `LvglCameraPreview.displayAspect` exposes the effective
+  on-screen aspect derived from the sensor active array, and
+  `setDisplayAspectListener { aspect, width, height -> ... }` notifies apps when
+  rotation, zoom or camera switching changes it. The camera sample subscribes
+  and re-fits its native preview overlay from the published aspect.
+- `V130GuardTest` with five fail-closed wiring detectors and canaries:
+  `wired-motion-config`, `wired-native-motion-setter`, `wired-scroll-throw`,
+  `camera-aspect-active-array` and `wired-camera-aspect-listener`. A feature
+  that exists in source but is never called now fails the guard suite.
+  [BC-014, BC-037]
+
+### Changed
+
+- `LvglActivity` installs `LvglMotionConfig` by default on create and on
+  configuration change; `LvglEngine` declares and calls the native
+  `nativeSetMotionConfig` JNI setter, and native code applies the fling scale
+  with `lv_indev_set_scroll_throw()` and uses the polled durations for spring
+  and window transitions.
+- Camera preview sizing no longer infers aspect from `getOutputSizes()` alone:
+  the static active-array size and a `CaptureResult` crop-region callback keep
+  the overlay aligned with what the sensor actually captures.
+- [docs/performance.md](docs/performance.md) documents the measurement command
+  and states plainly that measured numbers will be recorded only after a
+  hardware run; no emulator or invented values are presented as results.
+
+### Fixed
+
+- Camera overlays no longer drift out of alignment after rotation, zoom or
+  camera switching, because aspect is republished by the capture callback
+  instead of being sampled once from output sizes.
+- Motion values are read from ROM settings and framework durations instead of
+  being hard-coded in the UI kit, with bounded single-shot reads and fallbacks
+  so a missing setting can never block startup.
+
 ## [1.2.0] - 2026-11-25
 
 General Android adoption release: the framework is now positioned and

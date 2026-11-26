@@ -1,7 +1,7 @@
 # LVGL Android Framework — Development Roadmap
 
-> Last updated: 2026-11-25
-> Current Phase: Phase 25 — General Android adoption, interop and governance
+> Last updated: 2026-11-26
+> Current Phase: Phase 26 — ROM motion and sensor-accurate camera aspect
 
 ## Overview
 
@@ -263,6 +263,30 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
   `1.2.0` released on 2026-11-25 (versionCode 3) with signed artifacts. Play
   Console forms and the store listing remain a manual user step.
 
+### Phase 26: ROM Motion & Sensor-Accurate Camera Aspect ✅
+
+- **Motion config**: `LvglMotionConfig` (`com.lvgl.android.motion`) polls
+  `ViewConfiguration` fling/touch constants, `Settings.Global` animation scales
+  and framework animation durations with bounded single-shot reads and
+  fallbacks, logs what it found and pushes it through
+  `LvglEngine.applyMotionConfig()` into the native engine.
+- **Applied by default**: `LvglActivity` installs the config on create and on
+  configuration change; native code applies the fling scale via
+  `lv_indev_set_scroll_throw()` and drives spring/window transition durations
+  from the polled values. Apps override with `setOverride(config)` or disable
+  with `setEnabled(false)`. Documented in `docs/motion.md`.
+- **Camera aspect**: `LvglCameraPreview` derives the effective display aspect
+  from `CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE` plus a
+  `CaptureResult` crop-region callback, publishes it through `displayAspect`
+  and `setDisplayAspectListener { aspect, width, height -> ... }`, and the
+  sample re-fits its native overlay from that callback.
+- **Guards**: `V130GuardTest` adds five fail-closed wiring detectors (motion
+  install, native setter declaration/call, scroll throw, active-array aspect,
+  aspect-listener subscription) with broken/clean canaries. Presence of code is
+  still not treated as evidence that a feature is wired. [BC-014, BC-037]
+- **Release**: `1.3.0` (versionCode 4) on 2026-11-26; performance results remain
+  explicitly pending a hardware run.
+
 ---
 
 ## Progress Tracking
@@ -294,6 +318,7 @@ This roadmap tracks planned improvements for the LVGL Android Framework. All pha
 | Phase 23: Google Play Compatibility | ✅ Complete | 2026-11-04 | 2026-11-04 |
 | Phase 24: Gate Integrity and Shipping Verification | ✅ Complete | 2026-11-24 | 2026-11-24 |
 | Phase 25: General Android Adoption, Interop and Governance | ✅ Complete | 2026-11-25 | 2026-11-25 |
+| Phase 26: ROM Motion and Sensor-Accurate Camera Aspect | ✅ Complete | 2026-11-26 | 2026-11-26 |
 
 ## Architecture Decision Records
 
@@ -533,3 +558,9 @@ view fallback. Documented in `docs/accessibility.md`.
   camera preview aspect fitting and camera cycling, integration wiring guards,
   the hybrid interop sample, the TalkBack node-provider bridge and the new
   adoption/docs/governance set (ADR-019/020). Shipped as v1.2.0 (versionCode 3).
+- **2026-11-26**: Phase 26 — ROM-derived motion (animation scales, framework
+  durations, ViewConfiguration fling/touch constants) ported into LVGL scroll
+  throw and spring/window transitions, and camera aspect derived from the
+  sensor active array plus a CaptureResult crop callback with a public
+  listener. Five new wiring guards with canaries; shipped as v1.3.0
+  (versionCode 4). Performance numbers still pending a hardware run.

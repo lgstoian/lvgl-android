@@ -50,6 +50,14 @@ Window::Window() : x_(0.0f), y_(0.0f), w_(800.0f), h_(480.0f), opa_(255.0f) {
     Engine::instance().add_spring(&w_);
     Engine::instance().add_spring(&h_);
     Engine::instance().add_spring(&opa_);
+    /* No fixed spring durations in the UI kit: geometry follows the ROM long
+     * transition, opacity the ROM short one. Engine::set_motion_config()
+     * re-applies these roles when an animation scale changes. */
+    x_.set_role(MotionRole::Long);
+    y_.set_role(MotionRole::Long);
+    w_.set_role(MotionRole::Long);
+    h_.set_role(MotionRole::Long);
+    opa_.set_role(MotionRole::Short);
 }
 
 Window::~Window() {

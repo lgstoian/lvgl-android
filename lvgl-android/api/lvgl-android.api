@@ -124,22 +124,51 @@ public final class com/lvgl/android/activity/LvglActivityAccessibilityExtKt {
 	public static final fun setupAccessibility (Lcom/lvgl/android/activity/LvglActivity;)Lcom/lvgl/android/activity/AccessibilitySetup;
 }
 
+public final class com/lvgl/android/camera/CaptureNaming {
+	public static final field INSTANCE Lcom/lvgl/android/camera/CaptureNaming;
+	public static final field JPEG_EXTENSION Ljava/lang/String;
+	public final fun timestampedJpegName (JLjava/util/TimeZone;)Ljava/lang/String;
+	public static synthetic fun timestampedJpegName$default (Lcom/lvgl/android/camera/CaptureNaming;JLjava/util/TimeZone;ILjava/lang/Object;)Ljava/lang/String;
+}
+
 public final class com/lvgl/android/camera/LvglCameraPreview {
 	public static final field Companion Lcom/lvgl/android/camera/LvglCameraPreview$Companion;
 	public fun <init> (Landroid/content/Context;)V
 	public final fun allCameraIds ()Ljava/util/List;
+	public final fun captureStillJpeg (Lkotlin/jvm/functions/Function1;)V
 	public final fun close ()V
 	public final fun getChosenPreviewSize ()Landroid/util/Size;
+	public final fun getDisplayAspect ()F
 	public final fun getOnOpenResult ()Lkotlin/jvm/functions/Function2;
 	public final fun open (Ljava/lang/String;)V
 	public static synthetic fun open$default (Lcom/lvgl/android/camera/LvglCameraPreview;Ljava/lang/String;ILjava/lang/Object;)V
 	public final fun selectPreviewSize (Ljava/lang/String;Landroid/util/Size;)Landroid/util/Size;
+	public final fun setDisplayAspectListener (Lkotlin/jvm/functions/Function3;)V
 	public final fun setOnOpenResult (Lkotlin/jvm/functions/Function2;)V
 	public final fun startPreview (Landroid/view/Surface;)V
 	public final fun stopPreview ()V
 }
 
 public final class com/lvgl/android/camera/LvglCameraPreview$Companion {
+}
+
+public final class com/lvgl/android/camera/StillCaptureResult {
+	public fun <init> ([BILjava/lang/String;II)V
+	public final fun component1 ()[B
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy ([BILjava/lang/String;II)Lcom/lvgl/android/camera/StillCaptureResult;
+	public static synthetic fun copy$default (Lcom/lvgl/android/camera/StillCaptureResult;[BILjava/lang/String;IIILjava/lang/Object;)Lcom/lvgl/android/camera/StillCaptureResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCameraId ()Ljava/lang/String;
+	public final fun getImageHeight ()I
+	public final fun getImageWidth ()I
+	public final fun getJpegBytes ()[B
+	public final fun getOrientationDegrees ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/lvgl/android/config/ConfigurationManager {
@@ -239,6 +268,7 @@ public final class com/lvgl/android/config/DpiManager$ScreenSize : java/lang/Enu
 
 public final class com/lvgl/android/engine/LvglEngine {
 	public static final field Companion Lcom/lvgl/android/engine/LvglEngine$Companion;
+	public final fun applyMotionConfig ([F)V
 	public final fun applyTheme (Z[I)V
 	public final fun captureFrame ()[I
 	public final fun currentScreen ()I
@@ -562,6 +592,140 @@ public abstract class com/lvgl/android/launcher/LvglLauncherActivity : com/lvgl/
 	protected fun onResume ()V
 	protected fun onStart ()V
 	protected fun onStop ()V
+}
+
+public final class com/lvgl/android/motion/LvglMotionConfig {
+	public static final field Companion Lcom/lvgl/android/motion/LvglMotionConfig$Companion;
+	public static final field FALLBACK_ANIMATION_SCALE F
+	public static final field FALLBACK_FAST_OUT_SLOW_IN_MID F
+	public static final field FALLBACK_LONG_ANIM_MS I
+	public static final field FALLBACK_LONG_PRESS_TIMEOUT_MS I
+	public static final field FALLBACK_MAX_FLING_VELOCITY I
+	public static final field FALLBACK_MEDIUM_ANIM_MS I
+	public static final field FALLBACK_MIN_FLING_VELOCITY I
+	public static final field FALLBACK_REFRESH_HZ F
+	public static final field FALLBACK_SCROLL_FRICTION F
+	public static final field FALLBACK_SHORT_ANIM_MS I
+	public static final field FALLBACK_TAP_TIMEOUT_MS I
+	public static final field FALLBACK_TOUCH_SLOP I
+	public static final field INTERPOLATOR_SAMPLES I
+	public static final field I_ANIMATOR_SCALE I
+	public static final field I_DECAY I
+	public static final field I_FAST_OUT_SLOW_IN_MID I
+	public static final field I_FRAME_INTERVAL_MS I
+	public static final field I_GESTURE_MIN_VELOCITY I
+	public static final field I_INTERPOLATOR_SAMPLES I
+	public static final field I_LONG_DAMPING I
+	public static final field I_LONG_STIFFNESS I
+	public static final field I_MEDIUM_DAMPING I
+	public static final field I_MEDIUM_STIFFNESS I
+	public static final field I_REFRESH_HZ I
+	public static final field I_SCROLL_LIMIT I
+	public static final field I_SCROLL_THROW I
+	public static final field I_SHORT_DAMPING I
+	public static final field I_SHORT_STIFFNESS I
+	public static final field MAX_REFRESH_HZ F
+	public static final field MAX_SCROLL_LIMIT I
+	public static final field MAX_SCROLL_THROW I
+	public static final field MAX_VELOCITY I
+	public static final field MIN_REFRESH_HZ F
+	public static final field MIN_SCROLL_LIMIT I
+	public static final field MIN_SCROLL_THROW I
+	public static final field MIN_SPRING_MS F
+	public static final field MIN_VELOCITY I
+	public static final field REFERENCE_FPS F
+	public static final field SPRING_DURATION_FACTOR F
+	public static final field WIRE_SIZE I
+	public fun <init> (IIFIIIFFFIIIFF[F)V
+	public synthetic fun <init> (IIFIIIFFFIIIFF[FILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun apply ()V
+	public final fun component1 ()I
+	public final fun component10 ()I
+	public final fun component11 ()I
+	public final fun component12 ()I
+	public final fun component13 ()F
+	public final fun component14 ()F
+	public final fun component15 ()[F
+	public final fun component2 ()I
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()F
+	public final fun component8 ()F
+	public final fun component9 ()F
+	public final fun copy (IIFIIIFFFIIIFF[F)Lcom/lvgl/android/motion/LvglMotionConfig;
+	public static synthetic fun copy$default (Lcom/lvgl/android/motion/LvglMotionConfig;IIFIIIFFFIIIFF[FILjava/lang/Object;)Lcom/lvgl/android/motion/LvglMotionConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAnimatorScale ()F
+	public final fun getDecay ()F
+	public final fun getFastOutSlowInMid ()F
+	public final fun getFastOutSlowInSamples ()[F
+	public final fun getFrameIntervalMs ()F
+	public final fun getGestureMinVelocity ()I
+	public final fun getLongAnimMs ()I
+	public final fun getLongPressTimeoutMs ()I
+	public final fun getLongSpring ()Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public final fun getMaxFlingVelocity ()I
+	public final fun getMediumAnimMs ()I
+	public final fun getMediumSpring ()Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public final fun getMinFlingVelocity ()I
+	public final fun getRefreshHz ()F
+	public final fun getScrollFriction ()F
+	public final fun getScrollLimit ()I
+	public final fun getScrollThrow ()I
+	public final fun getShortAnimMs ()I
+	public final fun getShortSpring ()Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public final fun getTapTimeoutMs ()I
+	public final fun getTouchSlop ()I
+	public final fun getTransitionScale ()F
+	public final fun getWindowScale ()F
+	public final fun getZeta ()F
+	public fun hashCode ()I
+	public final fun logApplied ()V
+	public final fun logPolled ()V
+	public fun toString ()Ljava/lang/String;
+	public final fun toWire ()[F
+}
+
+public final class com/lvgl/android/motion/LvglMotionConfig$Companion {
+	public final fun decayFromFriction (F)F
+	public final fun decayFromFrictionAtRefreshRate (FF)F
+	public final fun defaults ()Lcom/lvgl/android/motion/LvglMotionConfig;
+	public final fun fastOutSlowInFallback (F)F
+	public final fun frameIntervalFromRefreshRate (F)F
+	public final fun gestureMinVelocityFromMinVelocity (I)I
+	public final fun gestureMinVelocityFromMinVelocity (IF)I
+	public final fun getOverrideConfig ()Lcom/lvgl/android/motion/LvglMotionConfig;
+	public final fun install (Landroid/content/Context;)Lcom/lvgl/android/motion/LvglMotionConfig;
+	public final fun isEnabled ()Z
+	public final fun normalizeCurve ([F)[F
+	public final fun poll (Landroid/content/Context;)Lcom/lvgl/android/motion/LvglMotionConfig;
+	public final fun refreshHzFromContext (Landroid/content/Context;)F
+	public final fun sampleFastOutSlowIn (F)[F
+	public final fun scrollLimitFromTouchSlop (I)I
+	public final fun scrollThrowFromFriction (F)I
+	public final fun scrollThrowFromFrictionAtRefreshRate (FF)I
+	public final fun setEnabled (Z)V
+	public final fun setOverride (Lcom/lvgl/android/motion/LvglMotionConfig;)V
+	public final fun setOverrideConfig (Lcom/lvgl/android/motion/LvglMotionConfig;)V
+	public final fun springFromDuration (IFF)Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public final fun zetaFromInterpolator (F)F
+}
+
+public final class com/lvgl/android/motion/LvglMotionConfig$Spring {
+	public fun <init> (FFF)V
+	public final fun component1 ()F
+	public final fun component2 ()F
+	public final fun component3 ()F
+	public final fun copy (FFF)Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public static synthetic fun copy$default (Lcom/lvgl/android/motion/LvglMotionConfig$Spring;FFFILjava/lang/Object;)Lcom/lvgl/android/motion/LvglMotionConfig$Spring;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDamping ()F
+	public final fun getSettleMs ()F
+	public final fun getStiffness ()F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/lvgl/android/navigation/LvglNavigation {

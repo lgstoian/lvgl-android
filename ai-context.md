@@ -1042,4 +1042,58 @@ clean, so it is unaffected.
 **Trap**: a green `assembleRelease` does **not** prove `bundleRelease` works —
 run both, and never debug this failure by changing resource shrinking settings.
 
+## Camera Aspect & Motion Session (2026-11-26)
+
+### `getOutputSizes()` Does Not Describe the Captured Region
+
+**Problem**: the overlay was fitted once from a YUV output size and drifted out
+of alignment after rotation, zoom or camera switching.
+
+**Root Cause**: `getOutputSizes()` lists sensor output formats; it says nothing
+about the active array or the crop region actually delivered in each frame, and
+the preview is rotated relative to the sensor.
+
+**Fix**: derive the effective aspect from
+`CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE` plus the crop region
+reported in a `CaptureResult` callback, publish it through `displayAspect` and
+`setDisplayAspectListener { aspect, width, height -> ... }`, and re-fit the
+sample overlay from that callback. [BC-014, BC-037]
+
+**Trap**: do not "simplify" this back to output-size matching — a static size
+list cannot observe zoom or a streaming crop change.
+
+### Hard-Coded Motion Values Ignore the User's ROM
+
+**Problem**: spring/window timings felt wrong on devices where the user had
+changed (or disabled) animations, because the UI kit used fixed durations.
+
+**Root Cause**: LVGL's defaults are independent of `ViewConfiguration`,
+`Settings.Global` animation scales and framework duration resources.
+
+**Fix**: `LvglMotionConfig` polls those platform values once, logs them and
+pushes them through `LvglEngine.applyMotionConfig()` to the native
+`nativeSetMotionConfig` JNI setter; native code applies the fling scale with
+`lv_indev_set_scroll_throw()` and drives spring/window durations from the
+polled roles. `LvglActivity` installs it by default; apps override with
+`setOverride(config)` or opt out with `setEnabled(false)`.
+
+**Trap**: never leave a hard-coded duration in the component kit or hard-code a
+fling constant in the port — both defeat accessibility settings and the v1.3.0
+port. `V130GuardTest` fails when any of these call paths is missing.
+
+### No Unbounded Waits When Polling Platform Settings
+
+**Problem**: a missing/denied settings read or an unusual framework resource
+could stall startup or crash the poll.
+
+**Root Cause**: blocking waits and unchecked platform reads couple LVGL startup
+to ROM behaviour the app does not control.
+
+**Fix**: every source is a single-shot read inside `try/catch` with a
+documented fallback; a `ContentObserver` re-polls asynchronously on animation
+scale changes. No busy loop, no `wait()` without a deadline, no device access.
+
+**Trap**: do not add a retry loop with an unbounded wait to "make sure" a
+setting was read — a flake then becomes an ANR instead of a fallback value.
+
 

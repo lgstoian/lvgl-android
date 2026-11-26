@@ -413,4 +413,13 @@ void ui_set_battery_level(int level, bool charging);
  * thread (see lvgl_port.cpp). `dpi` is the real display density. */
 void launch_screen(int screen_id, int dpi, const UiTheme& theme);
 
+/* ---- Motion-config plumbing -------------------------------------------------
+ * The ROM-derived config is resolved on the Kotlin side and pushed through the
+ * engine. This entry point applies it to the shared animation engine on the
+ * LVGL thread. ui_transition_ms() scales a base duration by the active ROM
+ * animator scale so UI-kit timed effects follow device settings. */
+namespace lvgl_anim { struct MotionConfig; }
+void ui_apply_motion_config(const lvgl_anim::MotionConfig& cfg);
+int  ui_transition_ms(int base_ms);
+
 } /* namespace lvgl_android */

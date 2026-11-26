@@ -12,6 +12,12 @@
 - LVGL 9.x header structure (`include/lvgl/lvgl.h`), color format (BGRA→RGBA swap), user data APIs
 - Kotlin/JNI naming conflicts (`immersiveMode` not `isImmersive`)
 - `LV_THEME_DEFAULT_LIGHT` not defined in LVGL 9.6.0 (use `0`)
+- Never derive camera preview aspect from `getOutputSizes()` alone: use the
+  active array plus a `CaptureResult` crop callback (v1.3.0)
+- Never leave hard-coded motion values in the UI kit: `LvglMotionConfig` polls
+  ROM scales/framework durations and pushes them to native
+- No unbounded waits: every platform settings/resource read is single-shot and
+  bounded, with a fallback
 
 If you encounter an issue, check `ai-context.md` first. If you discover a new issue not documented there, add it with the problem, symptom, root cause, and resolution.
 
@@ -169,7 +175,8 @@ Start-Process -FilePath "D:\ASDK\emulator\emulator.exe" -ArgumentList "-avd", "t
 18. **Interop is a first-class surface**: `LvglSurfaceView` works in plain Activity/Fragment/Compose hosts, native views can be composited above it, and `HybridSampleActivity` proves both directions of the bridge with no JNI changes.
 19. **Accessibility node bridge**: `LvglSurfaceView.getAccessibilityNodeProvider()` returns an internal provider that mirrors `LvglUi` app screens (ids ≥ 1000) as virtual Android nodes; built-in screens and exact geometry are not exposed, so a native-view fallback is documented.
 20. **Integration guards**: `IntegrationGuardTest` verifies that features are wired through their call paths (multiwindow, gestures, perf sink, launcher receiver, announcements, camera permission, UI events), with fail-closed canaries. [BC-037]
-21. **Camera interop**: `LvglCameraPreview.selectPreviewSize(cameraId, target)` picks the closest-aspect YUV size and the sample letterboxes its native preview overlay; all camera ids (logical + physical) are enumerated for tap-to-cycle.
+21. **Camera interop**: `LvglCameraPreview.selectPreviewSize(cameraId, target)` picks the closest-aspect YUV size and the sample letterboxes its native preview overlay; all camera ids (logical + physical) are enumerated for tap-to-cycle. Since v1.3.0 the effective aspect comes from `SENSOR_INFO_ACTIVE_ARRAY_SIZE` plus a `CaptureResult` callback and is published through `setDisplayAspectListener`.
+22. **ROM-derived motion**: `LvglMotionConfig` (`com.lvgl.android.motion`) polls `ViewConfiguration`, `Settings.Global` animation scales and framework durations with bounded reads, and `LvglActivity` installs it by default; the engine pushes values over JNI to native scroll throw and spring/transition durations. Apps override with `setOverride(config)` or opt out with `setEnabled(false)`. [BC-037]
 
 ## UI Development Rules (LVGL)
 
@@ -222,6 +229,12 @@ are listed under "Guard Test Protection" below. Each rule is backed by a
 - Accessibility work must stay within the documented node-provider scope
   (`LvglUi` screens ≥ 1000); anything needing real bounds or native semantics
   belongs in a native view. See [docs/accessibility.md](docs/accessibility.md).
+- Do not trust `getOutputSizes()` for camera aspect: derive it from
+  `SENSOR_INFO_ACTIVE_ARRAY_SIZE` plus a `CaptureResult` crop callback and
+  subscribe through `setDisplayAspectListener` (v1.3.0).
+- Do not leave hard-coded motion values in the UI kit: let `LvglMotionConfig`
+  supply ROM scales and framework durations, and keep every platform read
+  single-shot/bounded with a fallback — no unbounded waits.
 
 ## AI Agent Breadcrumbs & Machine-Readable Comments
 
@@ -248,7 +261,15 @@ are listed under "Guard Test Protection" below. Each rule is backed by a
   must fail the gate, never read as "clean". Every detector needs a canary that
   must be detected, a clean fixture that must not be, and a wiring canary proving
   the detector is actually invoked. See `BC-037`.
-- `IntegrationGuardTest` (v1.2.0) adds seven wiring detectors:
+- `V130GuardTest` (v1.3.0) adds five wiring detectors: `wired-motion-config`,
+`wired-native-motion-setter`, `wired-scroll-throw`,
+`camera-aspect-active-array` and `wired-camera-aspect-listener`, each with a
+broken and a clean canary in `GuardCanaryTest`. The camera detector rejects an
+aspect derived from `getOutputSizes()` alone; the motion detectors reject a
+setter that is declared but never called and native scroll throw that exists
+only in a comment. [BC-014, BC-037]
+
+`IntegrationGuardTest` (v1.2.0) adds seven wiring detectors:
   `wired-multiwindow-pip`, `wired-gesture-results`, `wired-performance-caller`,
   `wired-launcher-receiver`, `wired-accessibility-announcements`,
   `wired-camera-permission` and `wired-ui-event-bridge`. Presence of a file or

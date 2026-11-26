@@ -51,7 +51,8 @@ A typical app keeps its normal Android architecture and uses this framework for 
 - Input Method Service (keyboard) support
 - Launcher/home screen support
 - Game-optimized activity with vsync
-- Camera2 helper with aspect-ratio-fit preview size selection, logical/physical camera enumeration and tap-to-cycle; the sample composites a native preview surface above LVGL
+- Camera2 helper with sensor-accurate aspect (active array + `CaptureResult` crop region), a public `displayAspect` / `setDisplayAspectListener` API, logical/physical camera enumeration and tap-to-cycle; the sample composites a native preview surface above LVGL
+- ROM-derived motion: `LvglMotionConfig` polls platform animation scales, framework durations and `ViewConfiguration` fling/touch values, then drives LVGL scroll throw and spring/window transitions — enabled by default, overridable or disabled per app ([details](docs/motion.md))
 - R/B pixel swap for correct RGBA rendering
 - Dedicated LVGL render thread (vsync-aware, honours LVGL's requested period)
 - Touch input with pointer gestures
@@ -73,6 +74,14 @@ A typical app keeps its normal Android architecture and uses this framework for 
   static C++ STL — 1.31 MB arm64-v8a, 1.33 MB x86_64, 2.06 MB universal APK,
   4.13 MB AAB
 
+Both v1.3.0 features are **default SDK behaviour**, not opt-in samples:
+`LvglActivity` installs `LvglMotionConfig` on create/configuration change, and
+`LvglCameraPreview` publishes the effective sensor aspect through a listener
+that the sample uses to letterbox its native overlay. Apps can override or
+disable motion with `LvglMotionConfig.setOverride(...)` / `setEnabled(false)`,
+or subscribe to camera aspect with `setDisplayAspectListener { ... }`; no
+framework source change is needed. Fail-closed guards verify each call path.
+
 ## Module Structure
 
 ```
@@ -92,7 +101,8 @@ android_lvgl/
 │   │   │   ├── input/          # LvglInputMethodService, LvglInputProcessor, gestures
 │   │   │   ├── launcher/       # LvglLauncherActivity, LauncherAppListener
 │   │   │   ├── game/           # LvglGameActivity
-│   │   │   ├── camera/         # LvglCameraPreview
+│   │   │   ├── camera/         # LvglCameraPreview (sensor aspect listener)
+│   │   │   ├── motion/         # LvglMotionConfig (ROM motion polling)
 │   │   │   ├── navigation/     # LvglNavigation (screen back stack)
 │   │   │   ├── accessibility/  # LvglAccessibilityManager, focus navigation, screen reader
 │   │   │   ├── perf/           # LvglPerformanceMonitor
@@ -373,6 +383,7 @@ After updating, check for:
 - [docs/public-api.md](docs/public-api.md) — Public API reference
 - [docs/interop.md](docs/interop.md) — LVGL inside a normal Android app; native views above LVGL; escape hatches
 - [docs/accessibility.md](docs/accessibility.md) — What TalkBack can and cannot see; native fallback
+- [docs/motion.md](docs/motion.md) — ROM motion polling, ported physics, defaults and overrides
 - [docs/performance.md](docs/performance.md) — Measuring with `LvglPerformanceMonitor`; render-thread caveats
 - [docs/migration.md](docs/migration.md) — Adopting from Compose/XML and exiting back
 - [template/README.md](template/README.md) — Copyable app template

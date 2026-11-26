@@ -29,6 +29,7 @@ screenshots/final/*.txt
 screenshots/hardware/*
 !screenshots/hardware/FINDINGS.md
 !screenshots/hardware/final2/
+!screenshots/hardware/v130/
 !screenshots/.gitkeep
 
 # Temporary

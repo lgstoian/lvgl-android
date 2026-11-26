@@ -26,6 +26,7 @@
  * @do-not Do not build screens in lvgl_port.cpp; use this file.
  */
 #include "demo_ui.h"
+#include "lvgl_anim.h"
 
 #include <android/log.h>
 #include <cstdarg>
@@ -80,6 +81,23 @@ static void (*g_on_toggle_dark_mode)(void) = nullptr;
 
 void ui_set_theme_hook(void (*toggle_dark_mode)(void)) {
     g_on_toggle_dark_mode = toggle_dark_mode;
+}
+
+/* ---- ROM-adaptive motion ---------------------------------------------------
+ * The config arrives over JNI from LvglMotionConfig. Applying it re-roles live
+ * springs; ui_transition_ms keeps timed UI-kit effects in step with the ROM's
+ * animator duration scale instead of using a fixed constant. */
+void ui_apply_motion_config(const lvgl_anim::MotionConfig& cfg) {
+    lvgl_anim::set_motion_config(cfg);
+}
+
+int ui_transition_ms(int base_ms) {
+    float scale = lvgl_anim::motion_config().animator_scale;
+    if (!(scale > 0.0f) || !std::isfinite(scale)) scale = 1.0f;
+    long ms = std::lround(base_ms * scale);
+    if (ms < 100) ms = 100;
+    if (ms > 20000) ms = 20000;
+    return (int)ms;
 }
 
 /* ---- Status-bar state ------------------------------------------------------
@@ -385,6 +403,25 @@ lv_obj_t* ui_make_card(lv_obj_t* parent) {
     return ui_make_panel(parent);
 }
 
+/* Section captions need the same height-safe treatment as every other single-
+ * line label: pin the box to the font's line height so a flex pass cannot lay
+ * it out shorter than the glyphs (which bottom-clips the caption of the last
+ * section in the scrollable body), fit the text to the card width and truncate
+ * with dots instead of clipping. ui_make_label() keeps it input-transparent.
+ * @breadcrumb BC-027 */
+static lv_obj_t* make_section_caption(lv_obj_t* parent, const char* caption) {
+    lv_obj_t* l = ui_make_label(parent, caption, g_tx.f_caption, g_pal.dim);
+    lv_obj_set_width(l, LV_PCT(100));
+    const int avail_w = lv_obj_get_width(parent) - 2 * g_tx.lg;
+    ui_fit_label(l, avail_w, g_tx.f_caption);
+    const lv_font_t* font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+    if (font) {
+        lv_obj_set_height(l, lv_font_get_line_height(font));
+    }
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
+    return l;
+}
+
 lv_obj_t* ui_make_section(lv_obj_t* parent, const char* caption) {
     lv_obj_t* card = ui_make_panel(parent);
     lv_obj_set_layout(card, LV_LAYOUT_FLEX);
@@ -394,7 +431,7 @@ lv_obj_t* ui_make_section(lv_obj_t* parent, const char* caption) {
     lv_obj_set_style_pad_row(card, ui_space(UI_SPACE_MD), LV_PART_MAIN);
     ui_decorative(card);
     if (caption) {
-        ui_make_label(card, caption, g_tx.f_caption, g_pal.dim);
+        make_section_caption(card, caption);
     }
     return card;
 }
@@ -951,7 +988,7 @@ lv_obj_t* ui_make_snackbar(lv_obj_t* parent, const char* message, const char* ac
         g_snackbar_timer = nullptr;
     }
     g_snackbar = s;
-    g_snackbar_timer = lv_timer_create(snackbar_timeout, 4000, s);
+    g_snackbar_timer = lv_timer_create(snackbar_timeout, ui_transition_ms(4000), s);
     lv_timer_set_repeat_count(g_snackbar_timer, 1);
     return s;
 }
@@ -2040,6 +2077,13 @@ void build_widget_screen(int /*dpi*/) {
 
     /* Material 3 component gallery: every component reads the active palette. */
     lv_obj_t* material = ui_make_section(body, "MATERIAL 3");
+    /* The default row gap puts the last section's caption exactly on the
+     * scrollable body's bottom clip edge: the caption's explicit single-line
+     * box is correct, but the body clips its lower rows. Use the tighter row
+     * token for this long list so the last caption sits fully inside the
+     * viewport. Every gap stays token-driven and no content changes.
+     * @breadcrumb BC-027 */
+    lv_obj_set_style_pad_row(body, ui_space(UI_SPACE_SM), LV_PART_MAIN);
 
     lv_obj_t* btn_row = ui_make_row(material, UI_SPACE_SM);
     lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW_WRAP);
