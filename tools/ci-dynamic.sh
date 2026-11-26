@@ -83,15 +83,17 @@ device_ready() {
   state="$(adb devices | awk '/emulator-/ {print $2; exit}')"
   [ "$state" = "device" ] || return 1
   adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 || return 1
-  probe="$(adb shell cmd package list packages -3 2>&1)"
-  echo "$probe" | grep -q "Can't find service" && return 1
+  for service in package activity; do
+    probe="$(adb shell cmd "$service" 2>&1)"
+    echo "$probe" | grep -q "Can't find service" && return 1
+  done
   return 0
 }
 
 # Markers that only appear when the emulator/adb channel itself is broken, not
 # when the app under test failed.
 unhealthy_log() {
-  grep -Eq "device offline|Can't find service: package|no devices/emulators found|Failed to start Emulator console|Unable to connect to adb daemon" "$1"
+  grep -Eq "device offline|Can't find service: (package|activity)|no devices/emulators found|Failed to start Emulator console|Unable to connect to adb daemon" "$1"
 }
 
 run_checks() {
