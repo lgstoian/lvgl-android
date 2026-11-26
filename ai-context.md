@@ -782,6 +782,23 @@ it for the adb/aapt/gradlew executable names.
 
 **Trap**: a green local Windows PowerShell run does not prove `pwsh` compatibility.
 
+### Do Not Restart the Runner-Owned Emulator From the Script
+
+**Problem**: a CI run hit the job's 6-hour limit after the dynamic harness
+killed the emulator and tried to start its own. `adb wait-for-device` blocked
+indefinitely because the runner owned the original process and port.
+
+**Root Cause**: `android-emulator-runner` starts and tears down the emulator;
+a `script` file must not take ownership of it. Killing it mid-walk leaves adb
+waiting for a device that will never appear.
+
+**Fix**: bounded recovery only — poll `device_ready` for at most 3 minutes and
+fail fast with a clear "re-run the workflow" message. Never call `adb emu kill`
+or launch a second emulator from `tools/ci-dynamic.sh`.
+
+**Trap**: a retry loop with unbounded waits converts an emulator flake into a
+6-hour job timeout; always bound each wait.
+
 ### The Runner's Emulator Refuses `-accel off` Without a TCG Opt-In
 
 **Problem**: on `ubuntu-latest` the Release smoke and the dynamic job timed out

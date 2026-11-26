@@ -59,18 +59,21 @@ wait_for_boot() {
   return 1
 }
 
-restart_emulator() {
-  echo "=== restarting the emulator"
-  adb emu kill >/dev/null 2>&1 || true
-  sleep 5
-  # adb emu kill needs a working adb channel; fall back to signalling the
-  # emulator process so port 5554 is released for the next boot.
-  pkill -f "emulator.*-avd $AVD" >/dev/null 2>&1 || true
-  sleep 10
-  nohup "$EMULATOR" -avd "$AVD" -no-window -gpu swiftshader_indirect \
-    -no-snapshot -noaudio -no-boot-anim >/dev/null 2>&1 &
-  adb wait-for-device || true
-  wait_for_boot || true
+# Do NOT kill or start the emulator here: android-emulator-runner owns the
+# process and tearing it down mid-script previously left `adb wait-for-device`
+# blocked for hours until the job hit its 6h limit. Just wait, with a bound, for
+# the runner's device to become ready; otherwise fail fast and let the workflow
+# be re-run.
+wait_for_device_ready() {
+  i=0
+  while [ "$i" -lt 12 ]; do
+    if device_ready; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 15
+  done
+  return 1
 }
 
 # adb can report "device" while Android's package service is still unavailable
@@ -121,16 +124,17 @@ while [ "$attempt" -le "$ATTEMPTS" ]; do
   fi
 
   echo "=== attempt $attempt failed"
-  if unhealthy_log "$attempt_log"; then
-    echo "=== emulator/adb channel is unhealthy; recovering"
-  elif device_ready; then
+  if unhealthy_log "$attempt_log" || ! device_ready; then
+    echo "=== emulator/adb channel is unhealthy; waiting up to 3 minutes for recovery"
+    if ! wait_for_device_ready; then
+      echo "=== emulator did not become ready; aborting (re-run the workflow)"
+      exit 1
+    fi
+  else
     echo "=== device is healthy; this is a real failure, not an emulator flake"
     exit 1
-  else
-    echo "=== device is not ready for instrumented tests; recovering"
   fi
 
-  restart_emulator
   attempt=$((attempt + 1))
 done
 
